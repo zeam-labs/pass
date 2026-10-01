@@ -1,0 +1,69 @@
+Vendored PHP dependencies for the ZEAM Pass settlement core.
+Resolved with composer 2 (docker image composer:2) on 2026-09-26: composer require simplito/elliptic-php kornrunner/keccak
+Only library sources and license files are copied; tests, docs, benchmarks and build files are left out.
+Comments are removed from the PHP sources (PHP tokenizer: T_COMMENT and T_DOC_COMMENT tokens, trailing whitespace, runs of blank lines), 2026-10-01; the code is otherwise upstream's. License files are verbatim.
+Loaded by ../autoload.php; no Composer at runtime.
+symfony/polyfill-mbstring (required by kornrunner/keccak) is NOT vendored: Keccak only calls mb_strlen/mb_substr with the 8bit encoding, which ext-mbstring or WordPress core's compat functions provide; ZeamPass\Core::missing() reports their absence.
+
+kornrunner/keccak           1.1.0   433749d28e117fb97baf9f2631b92b5d9ab3c890  MIT
+simplito/bigint-wrapper-php 1.0.0   cf21ec76d33f103add487b3eadbd9f5033a25930  MIT
+simplito/bn-php             1.1.4   83446756a81720eacc2ffb87ff97958431451fd6  MIT
+simplito/elliptic-php       1.0.12  be321666781be2be2c89c79c43ffcac834bc8868  MIT
+
+SHA-256 upstream, as resolved
+f2f8533cd3a42f9a94159f343d0bf2710ca59eab9791e87d0340b577edb7b02c  kornrunner/keccak/LICENSE
+a4bf70e4d527499015b13af58d97a805521ae488f0a4ffcb58007126d120b3b1  kornrunner/keccak/src/Keccak.php
+0cb4f887026ad5659408465da58833273a4248b44768e56890650dda53458f3f  simplito/bigint-wrapper-php/LICENSE.md
+26513cd0cf8026989a2cdc619840da2b8963ee1977d48187d572f12f0ae82415  simplito/bigint-wrapper-php/lib/BigInteger.php
+0cb4f887026ad5659408465da58833273a4248b44768e56890650dda53458f3f  simplito/bn-php/LICENSE.md
+fb5c231d0874b9186404dee9e7e138133deadadf4e840959f3014b50dcad1db1  simplito/bn-php/lib/BN.php
+ddb6ab78b69233f2705953172f29a5e2813028e82ab734fc97ab28ab32f6727f  simplito/bn-php/lib/Red.php
+9aeef474d6a0bb3e8bfdd9f780a848732f4a44a80ad54b5a927de9b7c4238a9f  simplito/elliptic-php/LICENSE.md
+22745b4871e50fe5007bac1f58b562419a1c1e56076a4d0acd5e5d3a0e29637e  simplito/elliptic-php/lib/Curve/BaseCurve.php
+19e510468aed234cb2fbfeee643702bbd1228a18277de7ddc5375629afdb83e7  simplito/elliptic-php/lib/Curve/BaseCurve/Point.php
+b7532480eeaa4206519e3b8629b8a55d2aa95e0604b7deba9407163acb907da1  simplito/elliptic-php/lib/Curve/EdwardsCurve.php
+7061bd20e7505cffd989156f5ed4e123a89976b82b684f5475beab3f77fb16fe  simplito/elliptic-php/lib/Curve/EdwardsCurve/Point.php
+f23c85903bbba21a66451bcf337f3a1c68fa9111a4d0f888bf0b4410296e4b3f  simplito/elliptic-php/lib/Curve/MontCurve.php
+6fad36ae6902941522a1fa2b6561f73f89401fb80521dcf0f034e1703e130bf0  simplito/elliptic-php/lib/Curve/MontCurve/Point.php
+79265bda854d45f103654e09e8a4dac23ac165cde004d3ed43a2d550b0570d47  simplito/elliptic-php/lib/Curve/PresetCurve.php
+1a9fe338f28de3d33b60f2b7fe41f6d543d819fc04ca50bf875ea6a2b7932783  simplito/elliptic-php/lib/Curve/ShortCurve.php
+3ceb1c1fe4baef2503e0e456b7a136693fd5526369d3865101248ed9794dc95a  simplito/elliptic-php/lib/Curve/ShortCurve/JPoint.php
+d7eaecabbb4f14ea108193de18600dc2b75e9d79c55864424968dd0bb9823bcc  simplito/elliptic-php/lib/Curve/ShortCurve/Point.php
+1724eb75cc6230a3bc248e30e5ccec8d52ffdbce7b95a108bdd5d9dd904b5d9b  simplito/elliptic-php/lib/Curves.php
+96a7d6a34c8b3a1ae27aa79835b8f06cfa55868fd1041140cdd5cf5fe0f70fb6  simplito/elliptic-php/lib/EC.php
+495594512524fb2591b629f1ecd9da8f61dd2eacc501d31c08bcec55e4923eed  simplito/elliptic-php/lib/EC/KeyPair.php
+d347217df345c810366c493241a0cb7e9268a57ab5b9a5fced2a48b96b05781e  simplito/elliptic-php/lib/EC/Signature.php
+a57b2325acbb3d7133a8261bd4c574c56d3174f209de6d2e7ac727f6ec4de9ee  simplito/elliptic-php/lib/EdDSA.php
+41c8234ac896745b183964aa13c6b2a7f82e77afda5032680fc3581185a35d8b  simplito/elliptic-php/lib/EdDSA/KeyPair.php
+663ce928e9efe36f1db7e9b745e3733aff01666e322e43c40cc90ef9c8d3798a  simplito/elliptic-php/lib/EdDSA/Signature.php
+951593b03a05835bce2bdaf66274b4ccbd0aa23dc1ab79ca8696543426a08a49  simplito/elliptic-php/lib/HmacDRBG.php
+5739b8fd6ad02997f16e82d73ed6acfc98805dd833f61cfe3e121b3b55542b9b  simplito/elliptic-php/lib/Utils.php
+
+SHA-256 shipped
+f2f8533cd3a42f9a94159f343d0bf2710ca59eab9791e87d0340b577edb7b02c  kornrunner/keccak/LICENSE
+2073eaf355edb14e5a149e040fdf65c9ad3d6e1432c931cb9257c13f9828e5dd  kornrunner/keccak/src/Keccak.php
+0cb4f887026ad5659408465da58833273a4248b44768e56890650dda53458f3f  simplito/bigint-wrapper-php/LICENSE.md
+d83ba2234564d17fdb393da32670ec6857e8b7a037901999aabd53265077fcc1  simplito/bigint-wrapper-php/lib/BigInteger.php
+0cb4f887026ad5659408465da58833273a4248b44768e56890650dda53458f3f  simplito/bn-php/LICENSE.md
+d8d96fa04f320e0ab472bc80a2e19ea9f4a1ae7424cc09ce57bcecfb5035c328  simplito/bn-php/lib/BN.php
+748a09331455d937de25aabbc3795a40af73499f207178f7a544b52a43e4810e  simplito/bn-php/lib/Red.php
+9aeef474d6a0bb3e8bfdd9f780a848732f4a44a80ad54b5a927de9b7c4238a9f  simplito/elliptic-php/LICENSE.md
+a62778b4b62f71d39e26d4c2233a8eebb83a859838b7636dcf23adfb0584afdd  simplito/elliptic-php/lib/Curve/BaseCurve.php
+19e510468aed234cb2fbfeee643702bbd1228a18277de7ddc5375629afdb83e7  simplito/elliptic-php/lib/Curve/BaseCurve/Point.php
+41fc4fd0d8f1b2397c22a50ea0f67d70c43be5c16d248c91ced8a81fb9f302a5  simplito/elliptic-php/lib/Curve/EdwardsCurve.php
+c67ccde25fcb2f60adb9cfea3ac73b58598745824069f177dc2e39db778bc7e6  simplito/elliptic-php/lib/Curve/EdwardsCurve/Point.php
+f23c85903bbba21a66451bcf337f3a1c68fa9111a4d0f888bf0b4410296e4b3f  simplito/elliptic-php/lib/Curve/MontCurve.php
+91c761c416e7983a742cfd50ab432fb670605da0568ef2702ac63c943bc59417  simplito/elliptic-php/lib/Curve/MontCurve/Point.php
+79265bda854d45f103654e09e8a4dac23ac165cde004d3ed43a2d550b0570d47  simplito/elliptic-php/lib/Curve/PresetCurve.php
+06fe9b74ea5a09f5fd9a2351644b0576bfe53c68d5a23e5f0625bae8836bb592  simplito/elliptic-php/lib/Curve/ShortCurve.php
+b7e30cca748c2162b144ff6af16c6cca8d2f7fc62a982c605c912acc9b8d54ea  simplito/elliptic-php/lib/Curve/ShortCurve/JPoint.php
+e80d941aac67fc818c199425979382d0731ab6a95c81ee681dcef754f3b82593  simplito/elliptic-php/lib/Curve/ShortCurve/Point.php
+c09570d94cfab8c527d14552c1e4d5d57bced292fb6a45a0cc92d4544760abe3  simplito/elliptic-php/lib/Curves.php
+cbd59b4232fa05be16b1040b0e36c561505c6a56b8a87574130af23a0c09652d  simplito/elliptic-php/lib/EC.php
+19a06addf1f226ae1c7a0ec39cc07745de65707f5d92dcb4330055ed280837af  simplito/elliptic-php/lib/EC/KeyPair.php
+9208a3a9f65343df23c28a26a8a18f23bae1e36caf9f03ec452a39d99d531d34  simplito/elliptic-php/lib/EC/Signature.php
+0783f31ec11185f466d72199cf35c2f2d32156a7f8184eb113566023f620cd8b  simplito/elliptic-php/lib/EdDSA.php
+26c1f1cd47d0c350f2425c1b162450f251b59724c7be313df0b3b7a81bd0ae26  simplito/elliptic-php/lib/EdDSA/KeyPair.php
+02636af2cb39331738c02d0128fed17aa3dfccf06b50d4fd48539bc63c4f5e01  simplito/elliptic-php/lib/EdDSA/Signature.php
+f4646e2e663ba930198c5c41920fd9b4e7bd1bbdc26831eb9cf57aedd82f1e74  simplito/elliptic-php/lib/HmacDRBG.php
+5208d15c6766cb157ed64d13d1ce8543e7e50b15b11a8d3ea3ddfce6dbe2988c  simplito/elliptic-php/lib/Utils.php

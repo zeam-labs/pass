@@ -1,0 +1,38 @@
+[project]
+name = "zeam-pass"
+version = "1.0.2"
+license = "GPL-2.0-only"
+license-files = ["LICENSE"]
+authors = [{name = "ZEAM Labs, LLC", email = "info@zeamlabs.com"}]
+description = "ZEAM :: Pass for your own server: a paywall (x402; you keep 90.01%), a key gate, or both, for your MCP and HTTP tools. Runs in your process with your keys."
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = ["x402", "mcp", "agents", "paywall", "gate", "batch-settlement", "usdc", "base"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+dependencies = [
+    "coincurve>=20,<22",
+    "pycryptodome>=3.19,<4",
+]
+
+[project.urls]
+Homepage = "https://zeampass.com"
+Source = "https://github.com/zeam-labs/pass"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["zeam_pass*"]

@@ -1,0 +1,52 @@
+{
+  "name": "@zeam-labs/pass",
+  "version": "1.0.2",
+  "license": "GPL-2.0-only",
+  "author": "ZEAM Labs, LLC <info@zeamlabs.com> (https://www.zeamlabs.com)",
+  "homepage": "https://zeampass.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zeam-labs/pass.git",
+    "directory": "node"
+  },
+  "bugs": {
+    "email": "info@zeamlabs.com"
+  },
+  "type": "module",
+  "description": "ZEAM :: Pass for your own server: a paywall (x402; you keep 90.01%), a key gate, or both, for your MCP and HTTP tools. Runs in your process with your keys.",
+  "keywords": [
+    "x402",
+    "mcp",
+    "agents",
+    "paywall",
+    "gate",
+    "batch-settlement",
+    "usdc",
+    "base",
+    "zeam",
+    "zeam-pass",
+    "model-context-protocol",
+    "mcp-server",
+    "micropayments",
+    "monetization"
+  ],
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "src",
+    "examples/server.mjs",
+    "examples/existing-mcp.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "viem": "2.56.9"
+  }
+}
