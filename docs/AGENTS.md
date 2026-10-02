@@ -31,7 +31,8 @@ Without `--call` or `--tools` the Bridge is an MCP stdio server.
   5 for the stock x402 SDK; `X402_DEPOSIT_MULTIPLIER` for the Bridge (default 40, minimum 3). The deposit must reach
   the floor in the 402's `deposit` line; below it the answer is `funding_requires_open_fee` with `neededMicroUSD`.
   Raise the multiplier until price × multiplier ≥ floor.
-- **A failed call is not charged.** Arguments are checked first; a failed tool releases the hold. A call the tool
+- **A failed call is not charged.** Arguments are checked first; a failed tool releases the hold. An unpaid call
+  with no arguments (no body, an empty body or `{}`) gets the 402 with the price. A call the tool
   completes is charged, even when the connection drops before the answer arrives. Settlement comes
   back in the `PAYMENT-RESPONSE` header (MCP: `_meta["x402/payment-response"]`).
 
@@ -204,7 +205,7 @@ when it was sent, or `op: "refund_signed"` for `selfSend` (section 5).
 
 | code | status | meaning | next step |
 |---|---|---|---|
-| `invalid_arguments` | 400 | the arguments do not match the tool's `inputSchema`, or the body is not JSON; nothing held | fix the arguments from `tools/list` |
+| `invalid_arguments` | 400 | the arguments do not match the tool's `inputSchema`, or the body is not JSON; nothing held. An unpaid call with no arguments gets the 402 instead | fix the arguments from `tools/list` |
 | `unknown_tool` | 404 | no tool by that name; HTTP lists the tools | use a name from `tools/list` |
 | `tool_failed` | 500 | the tool failed after the hold, its result is not valid JSON, or a usage tool reported no units; hold released, nothing charged | retry later, or with other arguments |
 | `not_found` | 404 | (WordPress) no published post with that id; nothing charged | find an id with `search_posts` |

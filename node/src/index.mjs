@@ -322,6 +322,15 @@ function pass(options = {}) {
     return { value, body }
   }
 
+  const probe = (t, args, payment, credential) => payment === '' && kind(args) === 'object' && Object.keys(args).length === 0 && !t.builtin && !isFree(t) && !(t.meter === 'time' && credential)
+
+  async function terms(t, path, header, resource, refundUrl) {
+    let price
+    try { price = engine.mode === 'gate' ? null : priceFor(t, {}) } catch { return null }
+    const q = await check({ path, header, resource, tool: describe(t), refundUrl, price })
+    return q.ok ? null : q
+  }
+
   async function http(request, toolName, refundUrl = null, info = {}) {
     const t = tools.get(toolName)
     if (!t) return json(404, { error: 'unknown_tool', tool: toolName, tools: names() })
@@ -329,6 +338,10 @@ function pass(options = {}) {
     let args
     try { args = raw.trim() ? JSON.parse(raw) : {} } catch { return json(400, { error: 'invalid_arguments', tool: toolName, message: 'the body is not JSON' }) }
     const bad = validate(t.inputSchema, args)
+    if (bad && probe(t, args, first(request.headers.get('payment-signature'), request.headers.get('x-payment')), first(request.headers.get('x-line')))) {
+      const q = await terms(t, `/v1/${toolName}`, (h) => request.headers.get(h), publicUrl(request.url), refundUrl)
+      return q ? json(q.status, q.body, q.headers) : json(400, { error: 'invalid_arguments', tool: toolName, message: bad })
+    }
     if (bad) return json(400, { error: 'invalid_arguments', tool: toolName, message: bad })
     if (t.builtin === 'line') {
       const l = await lineOp(args, request.headers.get('x-line') ?? '')
@@ -368,6 +381,10 @@ function pass(options = {}) {
     if (!t) return failure({ error: 'unknown_tool', tool: params.name, tools: names() })
     const args = params.arguments ?? {}
     const bad = validate(t.inputSchema, args)
+    if (bad && probe(t, args, params._meta?.[META_PAYMENT] ? 'paid' : '', first(typeof params._meta?.[META_LINE] === 'string' ? params._meta[META_LINE] : '', info.line))) {
+      const q = await terms(t, `mcp:${t.name}`, payHeader(null, grant), resource, refundUrl)
+      return q ? refusal(q) : failure({ error: 'invalid_arguments', tool: t.name, message: bad })
+    }
     if (bad) return failure({ error: 'invalid_arguments', tool: t.name, message: bad })
     if (isFree(t)) {
       const f = await served(t, args, { ip: info.ip, line: first(typeof params._meta?.[META_LINE] === 'string' ? params._meta[META_LINE] : '', info.line) })

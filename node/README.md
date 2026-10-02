@@ -179,7 +179,8 @@ $0.05.
 1. The arguments are checked against the tool's `inputSchema` (`type: object`, `required`, the types `string`,
    `number`, `integer`, `boolean`, `object`, `array`, `null`, `enum`, `minimum`, `maximum`, `minLength`,
    `maxLength`, and the same for an object argument's properties, 1 level deep). Bad arguments: HTTP 400 (MCP: an
-   `isError` result); nothing held, nothing charged, no chain read.
+   `isError` result); nothing held, nothing charged, no chain read. An unpaid call to a paid tool with no arguments
+   (no body, `{}`) gets the 402 of step 2.
 2. **paywall:** no payment answers 402 with the x402 `batch-settlement` terms. A payment is verified as the x402
    SDK's facilitator verifies it (voucher signature, channel binding, chain balance, cumulative amount) and the
    channel is held. **gate:** the zero-value x402 `exact` signature is verified offline (nothing is paid; the key

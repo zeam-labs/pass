@@ -3,7 +3,7 @@
  * Plugin Name: ZEAM Pass
  * Plugin URI: https://zeampass.com
  * Description: Put a gate, a paywall or both in front of your posts for AI agents, on your own site. Agents search and read over MCP and over x402 HTTP. No sign-up and no account: install, connect the wallet you are paid to, choose. Your earnings go to your own split, 90.01% to your wallet.
- * Version: 1.0.3
+ * Version: 1.0.5
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ZEAM Labs, LLC
@@ -11,6 +11,7 @@
  * License: GPL-2.0-only
  * License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  * Text Domain: zeam-pass
+ * Update URI: https://zeampass.com/downloads/zeam-pass.json
  */
 
 if (!defined('ABSPATH')) {
@@ -28,13 +29,14 @@ const ZEAM_PASS_LINE_OPS = ['open', 'prove', 'on', 'off', 'status', 'close'];
 const ZEAM_PASS_TIME_TOOLS = ['buy_time', 'line'];
 const ZEAM_PASS_BUILTIN_TOOLS = ['search_posts', 'read_post'];
 const ZEAM_PASS_NO_UNITS = 'the tool reported no units. Nothing was charged.';
-const ZEAM_PASS_VERSION = '1.0.3';
+const ZEAM_PASS_VERSION = '1.0.5';
 const ZEAM_PASS_RESULT_NOT_JSON = 'the result is not valid JSON (a non-finite number or a non-JSON value); nothing was charged';
 
 require_once __DIR__ . '/lib/autoload.php';
 require_once __DIR__ . '/includes/store.php';
 require_once __DIR__ . '/includes/keys.php';
 require_once __DIR__ . '/includes/engine.php';
+require_once __DIR__ . '/includes/update.php';
 
 function zeam_pass_opt($key, $default = null)
 {
@@ -458,27 +460,33 @@ function zeam_pass_first_header(array $headers, array $names)
     return '';
 }
 
+function zeam_pass_probe(array $t, $args, $payment, $line)
+{
+    return $payment === '' && $args === [] && !isset($t['builtin']) && empty($t['free']) && !(($t['meter'] ?? null) === 'time' && $line !== '');
+}
+
 function zeam_pass_serve($tool, $path, $resource, $args, array $payment_headers, $who = '')
 {
+    $t = zeam_pass_tools()[$tool];
+    $line = zeam_pass_first_header($payment_headers, ['x-line']);
+    $payment = zeam_pass_first_header($payment_headers, ['payment-signature', 'x-payment']);
     $bad = zeam_pass_validate($tool, $args);
     if (!$bad) {
         $bad = zeam_pass_precheck($tool, $args);
     }
-    if ($bad) {
+    $probe = $bad && zeam_pass_probe($t, $args, $payment, $line);
+    if ($bad && !$probe) {
         return zeam_pass_refusal($bad['status'], $bad) + ['arguments' => true];
     }
     if (!zeam_pass_ready()) {
         return zeam_pass_refusal(503, ['error' => 'not_ready', 'message' => 'this site has not finished setting up ZEAM Pass']);
     }
-    $t = zeam_pass_tools()[$tool];
-    $line = zeam_pass_first_header($payment_headers, ['x-line']);
     if (($t['builtin'] ?? null) === 'line') {
         return zeam_pass_serve_line_op($args, $line, strpos((string) $path, 'mcp:') === 0);
     }
     if (!empty($t['free'])) {
         return zeam_pass_serve_free($tool, $args, (string) $who);
     }
-    $payment = zeam_pass_first_header($payment_headers, ['payment-signature', 'x-payment']);
     $grant = zeam_pass_first_header($payment_headers, ['x-grant']);
     $res = zeam_pass_resource($tool, $resource);
     $timed = ($t['meter'] ?? null) === 'time';
@@ -492,7 +500,7 @@ function zeam_pass_serve($tool, $path, $resource, $args, array $payment_headers,
         try {
             $price = zeam_pass_price_for($tool, $t, $args);
         } catch (Throwable $e) {
-            return zeam_pass_refusal(500, ['error' => 'price_invalid', 'tool' => $tool, 'message' => \ZeamPass\message($e)]);
+            return $probe ? zeam_pass_refusal($bad['status'], $bad) + ['arguments' => true] : zeam_pass_refusal(500, ['error' => 'price_invalid', 'tool' => $tool, 'message' => \ZeamPass\message($e)]);
         }
         return zeam_pass_serve_paid($tool, $res, $args, $payment, $grant, zeam_pass_mode() === 'both', $price, $timed ? zeam_pass_time_meter()->callMs($price['micro']) : null);
     } catch (Throwable $e) {
@@ -598,7 +606,7 @@ function zeam_pass_bad_params($msg)
     if (!is_string($params['name'] ?? null) || $params['name'] === '') {
         return 'params.name must be a string';
     }
-    if (array_key_exists('arguments', $params) && !zeam_pass_is_object($params['arguments'])) {
+    if (isset($params['arguments']) && !zeam_pass_is_object($params['arguments'])) {
         return 'params.arguments must be an object';
     }
     if (array_key_exists('_meta', $params) && !zeam_pass_is_object($params['_meta'])) {

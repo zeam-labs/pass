@@ -175,7 +175,8 @@ earnings, and gate usage. Fields: https://zeampass.com/docs/sell#status
 
 1. Arguments are checked against your `input_schema` (types, `required`, `enum`, `minimum`, `maximum`, `minLength`,
    `maxLength`, and the same for an object argument's properties, 1 level deep). Bad arguments, and bodies with
-   `NaN`, `Infinity` or numbers too large for a float: 400 (MCP: an error result); nothing held. Properties the
+   `NaN`, `Infinity` or numbers too large for a float: 400 (MCP: an error result); nothing held. An unpaid call to
+   a paid tool with no arguments (no body, `{}`) gets the 402 with the price. Properties the
    schema does not name are allowed, as in Node: your function gets the ones its signature takes (all of them with
    `**kwargs`).
 2. The payment is verified and held.

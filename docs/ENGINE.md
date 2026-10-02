@@ -23,7 +23,10 @@ structure, names and behavior, and pass the same shared fixtures.
 
 ## Request flow
 
-1. Validate the arguments against the tool's `inputSchema`. Bad arguments: 400, nothing held.
+1. Validate the arguments against the tool's `inputSchema`. Bad arguments: 400, nothing held. Except a probe: no
+   payment, no line credential on a time tool, and no arguments (no body, a blank body, `{}`; MCP `arguments`
+   absent, null or `{}`) to a paid tool answers the unpaid 402 of step 2, nothing run (a price that cannot be read
+   for it: the 400).
 2. By mode:
    - **paywall:** no payment → 402 from `paymentRequired`. Else `verifyAndHold`, run the tool, then `settle` on
      success (PAYMENT-RESPONSE / MCP `_meta["x402/payment-response"]`) or `release` on failure. A failed settle

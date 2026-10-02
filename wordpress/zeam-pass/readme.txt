@@ -4,7 +4,7 @@ Tags: ai, agents, x402, paywall, mcp
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.3
+Stable tag: 1.0.5
 License: GPL-2.0-only
 License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 
@@ -41,7 +41,7 @@ The engine runs inside your WordPress. ZEAM holds none of your money or keys and
 
 == Installation ==
 
-1. Download the plugin: https://zeampass.com/downloads/zeam-pass-1.0.3.zip (its SHA-256 is next to it, at the same address plus .sha256). Plugins -> Add New -> Upload Plugin, choose the zip, Install Now, then Activate.
+1. Download the plugin: https://zeampass.com/downloads/zeam-pass-1.0.5.zip (its SHA-256 is next to it, at the same address plus .sha256). Plugins -> Add New -> Upload Plugin, choose the zip, Install Now, then Activate.
 2. Settings -> ZEAM Pass.
 3. Connect your payout wallet: your browser wallet, or paste the address.
 4. Choose gate, paywall or both. Paywall: set a price per call; optional, a price or Free per tool and free calls an hour per address. Gate: list the addresses of the keys you admit. "Contact for access": a web address or a mailto: address where an agent asks to be admitted. Agents see it in every 402 and when a key is refused. Empty: your site's address; your admin email is never shown.
@@ -49,6 +49,8 @@ The engine runs inside your WordPress. ZEAM holds none of your money or keys and
 6. Save. The page shows your split, earnings, gate usage and the credit wallet to fund.
 
 Your site must be reachable from the internet and use pretty permalinks.
+
+**Updates.** New versions appear in Dashboard -> Updates and on the Plugins page like any other plugin, with the WordPress auto-update setting, off unless you turn it on. They come from zeampass.com, signed by ZEAM Labs: the plugin installs a new version only when its release file carries a valid signature and the download matches the signed SHA-256. A download that does not match is refused and nothing changes.
 
 **Requirements:** PHP 7.4 or later with GMP or BCMath, and sodium. The plugin checks for them and names a missing one on every admin page; until then your tools answer that the site is not ready, and nothing is charged.
 
@@ -66,15 +68,22 @@ Keys: `description`, `inputSchema`, `price` (USD, optional), `unit` (USD per uni
 
 == External services ==
 
-The plugin calls three outside services, with only the data listed here.
+The plugin calls four outside services, with only the data listed here.
 
 * **Base RPC** (default `https://mainnet.base.org`, run by Coinbase; configurable). Reads the gas price, the agents' channels in the x402 escrow, and your split's balance. It receives the public addresses and channel ids it is asked about. [Terms](https://docs.base.org/terms-of-service), [privacy](https://docs.base.org/privacy-policy).
 * **ZEAM relay** (default `https://api.zeampass.com/relay`, run by ZEAM Labs; configurable). Sends to Base the transactions your site signed: claims, payouts and refunds for your channels, and agents' deposits. It receives those signed transactions and your split's address and salt, pays their gas, and cannot change or redirect them. Paywall and both modes. [Terms](https://zeampass.com/terms), [privacy](https://zeampass.com/privacy).
+* **ZEAM updates** (`https://zeampass.com/downloads/zeam-pass.json`, run by ZEAM Labs). At most every 12 hours, and when you view the update details, WordPress fetches this signed release file to see whether a new version exists, then downloads the new version from `https://zeampass.com/downloads/` when you or your auto-update setting update the plugin. Both requests are plain HTTPS GETs with the user agent `WordPress` and nothing else about your site: no site address, no WordPress or plugin version, no settings, no keys. [Terms](https://zeampass.com/terms), [privacy](https://zeampass.com/privacy).
 * **ZEAM credit service** (default `https://api.zeampass.com/credits`, run by ZEAM Labs). Where gate mode buys checks after the 10,000 free each month. It receives your payout address, your Pass name, how many checks to buy, and the USDC payment from your credit wallet, and returns a credit note signed by ZEAM. Gate mode only. [Terms](https://zeampass.com/terms), [privacy](https://zeampass.com/privacy).
 
 No personal data about your visitors or editors is sent. Agents' payments reach the relay only as the transactions they signed.
 
 == Changelog ==
+
+= 1.0.5 =
+* An unpaid call with no arguments answers 402 with the price, as x402 directories expect when they probe. Arguments that are present are still checked before any payment.
+
+= 1.0.4 =
+* Updates from zeampass.com, signed.
 
 = 1.0.3 =
 * Distributed from zeampass.com only.

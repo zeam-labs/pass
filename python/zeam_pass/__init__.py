@@ -231,7 +231,7 @@ class _RpcError(Exception):
 class Pass:
 
     def __init__(self, name, payout=None, mode="paywall", price=None, site=None, admit=None, relay=DEFAULT_RELAY,
-                 credits=DEFAULT_CREDITS, rpc=DEFAULT_RPC, state_dir=None, server_name=None, version="1.0.3", on_empty="refuse",
+                 credits=DEFAULT_CREDITS, rpc=DEFAULT_RPC, state_dir=None, server_name=None, version="1.0.4", on_empty="refuse",
                  fee_recipient=None, credit_issuer=None, refund_url=None, tick_seconds=60, relay_transport=None,
                  credits_http=None, settings=None, contact=None, payout_is_fee_recipient=False, prices=None, free=None, free_limit=None, time=None):
         self.name = name
@@ -508,6 +508,17 @@ class Pass:
             meter.switch(ident, op == "on")
         return {"status": 200, "body": {"op": op, **meter.status(ident)}}
 
+    def _probe(self, tool, args, payment, credential):
+        return payment == "" and isinstance(args, dict) and not args and not tool.get("builtin") and not self._is_free(tool) and not (tool.get("meter") == "time" and credential)
+
+    def _probe_terms(self, tool, resource, grant, refund_url):
+        try:
+            price = None if self.mode == "gate" else self._price_for(tool, {})
+        except Exception:
+            return None
+        s = self._serve(tool, {}, resource, "", grant, refund_url, price)
+        return None if s.get("delivered") or s.get("failed") else s
+
     def _price_or_refusal(self, tool, args):
         if self.mode == "gate":
             return None, None
@@ -526,10 +537,14 @@ class Pass:
         if not tool:
             return 404, {}, {"error": "unknown_tool", "tool": tool_name, "tools": list(self._tools)}
         try:
-            args = _loads(body or b"{}")
+            args = _loads(body if body and body.strip() else b"{}")
         except ValueError as e:
             return 400, {}, {"error": "invalid_arguments", "message": f"the body is not JSON: {e}", "tool": tool_name}
         wrong = _validate(tool["inputSchema"], args)
+        if wrong and self._probe(tool, args, _first(headers, ("payment-signature", "x-payment")), _first(headers, ("x-line",))):
+            s = self._probe_terms(tool, resource, _first(headers, ("x-grant",)), refund_url)
+            if s:
+                return s["status"], s["headers"], s["body"]
         if wrong:
             return 400, {}, {"error": "invalid_arguments", "message": wrong, "tool": tool_name}
         if tool.get("builtin") == "line":
@@ -610,9 +625,13 @@ class Pass:
         if not tool:
             return _failure({"error": "unknown_tool", "tool": name, "tools": list(self._tools)})
         wrong = _validate(tool["inputSchema"], args)
+        credential = meta.get(META_LINE).strip() if isinstance(meta.get(META_LINE), str) and meta[META_LINE].strip() else (line or "").strip()
+        if wrong and self._probe(tool, args, "paid" if payment else "", credential):
+            s = self._probe_terms(tool, resource, grant, refund_url)
+            if s:
+                return self._payment_result(s)
         if wrong:
             return _failure({"error": "invalid_arguments", "tool": name, "message": wrong})
-        credential = meta.get(META_LINE).strip() if isinstance(meta.get(META_LINE), str) and meta[META_LINE].strip() else (line or "").strip()
         if self._is_free(tool):
             f = self._free(tool, args, client, credential)
             if "limited" in f:
