@@ -76,7 +76,7 @@ Routes:
 - `/agents/openapi.json`: the tools as OpenAPI.
 - `POST /agents/refund`: buyer refunds (see Refunds).
 
-The agent side: [zeampass.com/docs/agents](https://zeampass.com/docs/agents).
+The agent side: https://zeampass.com/docs/agents
 
 ## Options
 
@@ -170,7 +170,7 @@ $0.05.
 - Time: `agents.tool({ name: 'scan', meter: 'time', run: async (args, { signal, deadline }) => ... })`. On a line
   (`x-line`) it runs until `deadline` (`signal` aborts then) and burns the line's time; without a line it is a paid
   call bounded to its price's ms. Calls, `buy_time`, the line steps and refunds:
-  [Line time](https://zeampass.com/docs/agents#line-time).
+  https://zeampass.com/docs/agents#line-time
 - `paid()`, `instrument()` and `paywall` take prices by tool name (`prices`) or `{ price }`; usage metering and free
   limits are for `tool()`.
 
@@ -201,7 +201,7 @@ payment is refused.
 
 `mode: 'gate'` admits the keys in `admit`, free to them; `both` admits them and they pay per call. An agent signs
 each call with its key as a zero-value x402 payment (any x402 client makes one): nothing is paid, the key needs no
-funds or ETH, nothing goes on chain. Agent side: [Pass a gate](https://zeampass.com/docs/agents#pass-a-gate).
+funds or ETH, nothing goes on chain. Agent side: https://zeampass.com/docs/agents#pass-a-gate
 
 ```js
 const agents = pass({
@@ -288,7 +288,7 @@ export default {
 - `agents.tick()`: 1 run.
 - `agents.payout()`: pays out now through the relay, or returns a transaction to send from your wallet with ETH on
   Base for gas.
-- `agents.status()`: unclaimed, paid, gate usage. Fields: [Status](https://zeampass.com/docs/sell#status).
+- `agents.status()`: unclaimed, paid, gate usage. Fields: https://zeampass.com/docs/sell#status
 - `agents.stop()`: stops the timer.
 - `agents.verify(url)`: whether your `site` shares that URL's origin.
 
@@ -336,8 +336,8 @@ calls. The balance goes back through the relay:
 - `selfSend: true`: the buyer gets a signed refund of the full balance and sends it with ETH on Base for gas.
 - 1 refund per channel per hour.
 
-Every field and error: [Errors](https://zeampass.com/docs/agents#errors) and
-[Refunds](https://zeampass.com/docs/agents#refunds).
+Every field and error: https://zeampass.com/docs/agents#errors and
+https://zeampass.com/docs/agents#refunds
 
 ## Browsers
 

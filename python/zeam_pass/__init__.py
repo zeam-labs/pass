@@ -231,7 +231,7 @@ class _RpcError(Exception):
 class Pass:
 
     def __init__(self, name, payout=None, mode="paywall", price=None, site=None, admit=None, relay=DEFAULT_RELAY,
-                 credits=DEFAULT_CREDITS, rpc=DEFAULT_RPC, state_dir=None, server_name=None, version="1.0.2", on_empty="refuse",
+                 credits=DEFAULT_CREDITS, rpc=DEFAULT_RPC, state_dir=None, server_name=None, version="1.0.3", on_empty="refuse",
                  fee_recipient=None, credit_issuer=None, refund_url=None, tick_seconds=60, relay_transport=None,
                  credits_http=None, settings=None, contact=None, payout_is_fee_recipient=False, prices=None, free=None, free_limit=None, time=None):
         self.name = name

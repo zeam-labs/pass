@@ -47,7 +47,7 @@ Routes: `/agents/mcp` (MCP; payment in the tool call's `_meta`), `POST /agents/v
 `/agents/openapi.json` and `/agents/refund`, with CORS. Django mounts `agents.wsgi()` or `agents.asgi()` the same
 way. `examples/server.py` is a whole server on the standard library.
 
-The agent side: [zeampass.com/docs/agents](https://zeampass.com/docs/agents).
+The agent side: https://zeampass.com/docs/agents
 
 ## Modes
 
@@ -154,7 +154,7 @@ Removing the signing key from `admit` ends every grant it signed.
 
 Agent side, in Python: `new_key()` makes a key; `key_address(key)` is the address the seller lists;
 `gate_proof(key, payment_required)` signs the zero-value row of a gate's 402 (the body, or its `PAYMENT-REQUIRED`
-header) and returns the `PAYMENT-SIGNATURE` value. [Pass a gate](https://zeampass.com/docs/agents#pass-a-gate).
+header) and returns the `PAYMENT-SIGNATURE` value. Pass a gate: https://zeampass.com/docs/agents#pass-a-gate
 
 ## Keys
 
@@ -169,7 +169,7 @@ unsealed keys are sealed on the next start. Secret missing or wrong: paid calls 
 
 Put `state_dir` on storage that survives a redeploy, and back it up: it holds the keys and the channel records your
 earnings are claimed from. `agents.status()` shows the settle key and credit wallet addresses, unclaimed and unpaid
-earnings, and gate usage. Fields: [Status](https://zeampass.com/docs/sell#status).
+earnings, and gate usage. Fields: https://zeampass.com/docs/sell#status
 
 ## A call
 
@@ -241,8 +241,8 @@ calls. The balance goes back through the relay:
 - `"selfSend": true`: the buyer gets a signed refund of the full balance and sends it with ETH on Base for gas.
 - 1 refund per channel per hour; sooner: `refund_too_soon` with `retry_after_seconds`.
 
-Every field and error: [Errors](https://zeampass.com/docs/agents#errors) and
-[Refunds](https://zeampass.com/docs/agents#refunds).
+Every field and error: https://zeampass.com/docs/agents#errors and
+https://zeampass.com/docs/agents#refunds
 
 ## Background work
 

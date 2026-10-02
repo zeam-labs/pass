@@ -16,7 +16,7 @@ decisions.
 ## Set up
 
 1. **Install the plugin:** Node `@zeam-labs/pass`, Python `zeam-pass`, WordPress `ZEAM Pass`: `npm install @zeam-labs/pass`
-   (Node ≥18) / `pip install zeam-pass` (Python ≥3.9) / download https://zeampass.com/downloads/zeam-pass-1.0.1.zip, then
+   (Node ≥18) / `pip install zeam-pass` (Python ≥3.9) / download https://zeampass.com/downloads/zeam-pass-1.0.1.zip and use
    Plugins → Add New → Upload Plugin.
 2. **Connect your payout wallet.** Your earnings go there. It admits no one; the gate admits the keys you list.
 3. **Choose** gate, paywall or both. Paywall: set a price per call. Gate: list the keys you admit.
