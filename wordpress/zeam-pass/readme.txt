@@ -4,7 +4,7 @@ Tags: ai, agents, x402, paywall, mcp
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.3
 License: GPL-2.0-only
 License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 
@@ -31,7 +31,8 @@ The engine runs inside your WordPress. ZEAM holds none of your money or keys and
 * **Gas.** Paying needs no ETH. ZEAM's relay sends the transactions your site signed and pays their gas when the transaction covers its gas at the 9.99% fee. It sends only what your site signed, to where your site signed it.
 * **Payouts** run once a payout covers its gas. "Pay out now" pays through the relay when it covers its gas; below that it returns a transaction to send from your wallet with ETH on Base for gas.
 * **Refunds.** An agent's unspent balance goes back through `/wp-json/zeam-pass/refund`. `selfSend` gives the agent a signed refund of the full balance, which it sends with ETH on Base for gas. Without you: `initiateWithdraw`, then `finalizeWithdraw` after the withdrawal delay, each with ETH on Base for gas.
-* **Gate pricing.** 10,000 checks a month are free. The settings page shows the credit wallet's address. Send it USDC on Base; it needs no ETH. Credit is 2,000 checks at a time for $1 USDC ($0.50 per 1,000), bought after the month's 10,000 free checks are used and again below 200 remaining. Keep $1 USDC on Base in the credit wallet. Credit at 0: the gate refuses, or, if you choose, admits and warns. `both` mode needs no USDC in the credit wallet: paid calls are not gate checks.
+* **Gate pricing.** Gate mode is a metered ZEAM service. 10,000 checks a month are free. After that, your site buys credit from the ZEAM credit service automatically, paid from its credit wallet, whose address the settings page shows: 2,000 checks at a time for $1 USDC ($0.50 per 1,000), bought after the month's 10,000 free checks are used and again below 200 remaining. Keep $1 USDC on Base in the credit wallet. It needs no ETH. Paywall mode uses no credit and has no limit. `both` mode needs no USDC in the credit wallet: paid calls are not gate checks.
+* **When gate credit runs out, you choose.** "Refuse agents until credit is added" (the default) or "Admit agents and warn me here." Nothing else in the plugin stops or changes.
 * **Prices per tool.** Each tool: its own price, else the price per call. A 402 carries that call's amount, `pricing` for it and `prices` for every tool. `tools/list`: `_meta["zeam-pass/price"]`. OpenAPI: `x-price`.
 * **Free tools.** Check "Free" on a tool: no payment, no key, arguments still checked. "Free calls an hour per address": N per tool per IP per clock hour; over it a 429 with `Retry-After` and `retry_after_seconds`. Empty: no limit.
 * **Usage.** A tool with a `unit` price reserves its price, reports units, and is charged units x unit, at most the reserve. No units reported: failed, nothing charged. The settle answer has `chargedAmount` and `reservedAmount`.
@@ -40,7 +41,7 @@ The engine runs inside your WordPress. ZEAM holds none of your money or keys and
 
 == Installation ==
 
-1. Download the plugin: https://zeampass.com/downloads/zeam-pass-1.0.1.zip (its SHA-256 is next to it, at the same address plus .sha256). Plugins -> Add New -> Upload Plugin, choose the zip, Install Now, then Activate. Coming to the WordPress.org plugin directory.
+1. Download the plugin: https://zeampass.com/downloads/zeam-pass-1.0.3.zip (its SHA-256 is next to it, at the same address plus .sha256). Plugins -> Add New -> Upload Plugin, choose the zip, Install Now, then Activate.
 2. Settings -> ZEAM Pass.
 3. Connect your payout wallet: your browser wallet, or paste the address.
 4. Choose gate, paywall or both. Paywall: set a price per call; optional, a price or Free per tool and free calls an hour per address. Gate: list the addresses of the keys you admit. "Contact for access": a web address or a mailto: address where an agent asks to be admitted. Agents see it in every 402 and when a key is refused. Empty: your site's address; your admin email is never shown.
@@ -69,11 +70,17 @@ The plugin calls three outside services, with only the data listed here.
 
 * **Base RPC** (default `https://mainnet.base.org`, run by Coinbase; configurable). Reads the gas price, the agents' channels in the x402 escrow, and your split's balance. It receives the public addresses and channel ids it is asked about. [Terms](https://docs.base.org/terms-of-service), [privacy](https://docs.base.org/privacy-policy).
 * **ZEAM relay** (default `https://api.zeampass.com/relay`, run by ZEAM Labs; configurable). Sends to Base the transactions your site signed: claims, payouts and refunds for your channels, and agents' deposits. It receives those signed transactions and your split's address and salt, pays their gas, and cannot change or redirect them. Paywall and both modes. [Terms](https://zeampass.com/terms), [privacy](https://zeampass.com/privacy).
-* **ZEAM credit service** (default `https://api.zeampass.com/credits`, run by ZEAM Labs). Sells gate checks past the 10,000 free a month. It receives your payout address, your Pass name, the number of checks and a USDC payment signed by your credit wallet, and returns a credit note signed by ZEAM. Gate mode only, after the free checks are used. [Terms](https://zeampass.com/terms), [privacy](https://zeampass.com/privacy).
+* **ZEAM credit service** (default `https://api.zeampass.com/credits`, run by ZEAM Labs). Where gate mode buys checks after the 10,000 free each month. It receives your payout address, your Pass name, how many checks to buy, and the USDC payment from your credit wallet, and returns a credit note signed by ZEAM. Gate mode only. [Terms](https://zeampass.com/terms), [privacy](https://zeampass.com/privacy).
 
 No personal data about your visitors or editors is sent. Agents' payments reach the relay only as the transactions they signed.
 
 == Changelog ==
+
+= 1.0.3 =
+* Distributed from zeampass.com only.
+
+= 1.0.2 =
+* Readme: gate pricing, the seller's choice when credit runs out, and the credit service stated plainly.
 
 = 1.0.1 =
 * Plugin Check clean: exception messages escaped, queries prepared with fixed table names, input unslashed and sanitized, the file stores used only by the tests left out of the plugin.

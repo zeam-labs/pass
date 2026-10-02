@@ -3,7 +3,7 @@
  * Plugin Name: ZEAM Pass
  * Plugin URI: https://zeampass.com
  * Description: Put a gate, a paywall or both in front of your posts for AI agents, on your own site. Agents search and read over MCP and over x402 HTTP. No sign-up and no account: install, connect the wallet you are paid to, choose. Your earnings go to your own split, 90.01% to your wallet.
- * Version: 1.0.1
+ * Version: 1.0.3
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ZEAM Labs, LLC
@@ -28,7 +28,7 @@ const ZEAM_PASS_LINE_OPS = ['open', 'prove', 'on', 'off', 'status', 'close'];
 const ZEAM_PASS_TIME_TOOLS = ['buy_time', 'line'];
 const ZEAM_PASS_BUILTIN_TOOLS = ['search_posts', 'read_post'];
 const ZEAM_PASS_NO_UNITS = 'the tool reported no units. Nothing was charged.';
-const ZEAM_PASS_VERSION = '1.0.1';
+const ZEAM_PASS_VERSION = '1.0.3';
 const ZEAM_PASS_RESULT_NOT_JSON = 'the result is not valid JSON (a non-finite number or a non-JSON value); nothing was charged';
 
 require_once __DIR__ . '/lib/autoload.php';
