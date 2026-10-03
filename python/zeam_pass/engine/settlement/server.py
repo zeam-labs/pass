@@ -2,6 +2,7 @@ import re
 import secrets
 
 from ..batch_settlement import BatchSettlement
+from ..bazaar import for_header
 from ..core import Hex
 from ..php import is_int, php_empty, php_round, php_str, to_int
 from ..pricing import pricing
@@ -150,7 +151,7 @@ class Server:
             doc["extensions"] = extensions
         doc.update(self.terms(refund_url, p))
         doc.update(more or {})
-        return {"ok": False, "status": 402, "body": doc, "headers": {"PAYMENT-REQUIRED": Json.base64(doc)}}
+        return {"ok": False, "status": 402, "body": doc, "headers": {"PAYMENT-REQUIRED": Json.base64(for_header(doc))}}
 
     @staticmethod
     def _refuse(status, body, headers=None):

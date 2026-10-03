@@ -8,6 +8,7 @@ import { Json, Reason } from './json.mjs'
 import { GasQuote, Relay } from './relay.mjs'
 import { Verify } from './verify.mjs'
 import { pricing } from '../pricing.mjs'
+import { forHeader } from '../bazaar.mjs'
 
 const MISMATCH = Reason.CUMULATIVE_AMOUNT_MISMATCH
 const MIN_PENDING_TTL_MS = 5000
@@ -119,7 +120,7 @@ export class Server {
     let doc = Server.document(Server.resourceInfo(resource), null, this.accepts(p.micro))
     if (extensions && (Array.isArray(extensions) ? extensions.length : Object.keys(extensions).length)) doc.extensions = extensions
     doc = { ...doc, ...(await this.terms(refundUrl, p)), ...more }
-    return { ok: false, status: 402, body: doc, headers: { 'PAYMENT-REQUIRED': Json.base64(doc) } }
+    return { ok: false, status: 402, body: doc, headers: { 'PAYMENT-REQUIRED': Json.base64(forHeader(doc)) } }
   }
 
   static refuse(status, body, headers = {}) {

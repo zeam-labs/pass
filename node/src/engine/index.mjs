@@ -215,7 +215,7 @@ export function createEngine(options) {
     return creditRun
   }
 
-  async function check({ tool, resource, payment, grant, refundUrl = null, price = null, listing = {} }) {
+  async function check({ tool, resource, payment, grant, refundUrl = null, price = null, listing = {}, extensions = null }) {
     const res = { url: String(resource ?? ''), description: typeof tool?.description === 'string' ? tool.description : '', mimeType: 'application/json' }
     const toolName = tool?.name ?? ''
     try {
@@ -237,7 +237,7 @@ export function createEngine(options) {
         return { ok: true, ticket: { kind: 'gate', headers: a.root !== a.signer ? { [GRANTED_BY]: a.root } : {} } }
       }
       if (!payment) {
-        const q = await server.paymentRequired(res, null, refundUrl, c.mode === 'both' ? { admission: ADMISSION, ...reach, ...listing } : { ...reach, ...listing }, price)
+        const q = await server.paymentRequired(res, extensions, refundUrl, c.mode === 'both' ? { admission: ADMISSION, ...reach, ...listing } : { ...reach, ...listing }, price)
         return refusal(q.status, q.body, q.headers)
       }
       let grantedBy = null
@@ -247,7 +247,7 @@ export function createEngine(options) {
           const who = payerOf(payload)
           const a = await admitsPayer(who, grant, toolName)
           if (!a.ok && a.code === 'bad_grant') {
-            const q = await server.paymentRequired(res, null, refundUrl, { admission: ADMISSION, ...reach, ...listing, error: 'bad_grant' }, price)
+            const q = await server.paymentRequired(res, extensions, refundUrl, { admission: ADMISSION, ...reach, ...listing, error: 'bad_grant' }, price)
             return refusal(402, { ...q.body, message: a.why, how: BAD_GRANT_HOW }, q.headers)
           }
           if (!a.ok) return refusal(403, { error: 'refused', message: a.why, how: REFUSED_HOW, ...reach })

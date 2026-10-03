@@ -160,7 +160,7 @@ final class Server
             $doc['extensions'] = $extensions;
         }
         $doc = array_merge($doc, $this->terms($refundUrl, $p), $more);
-        return ['ok' => false, 'status' => 402, 'body' => $doc, 'headers' => ['PAYMENT-REQUIRED' => Json::base64($doc)]];
+        return ['ok' => false, 'status' => 402, 'body' => $doc, 'headers' => ['PAYMENT-REQUIRED' => Json::base64(\ZeamPass\Bazaar::forHeader($doc))]];
     }
 
     private static function refuse($status, array $body, array $headers = [])

@@ -349,13 +349,13 @@ function zeam_pass_charge_units(array $e, array $hold, $price, $units)
     return $micro === 0 ? '0' : $e['cfg']->unitsOfMicroUSD($e['cfg']->assetOf($hold['requirement']['asset']), $micro);
 }
 
-function zeam_pass_serve_paid($tool, $resource, array $args, $payment, $grant, $both, $price = null, $bound = null)
+function zeam_pass_serve_paid($tool, $resource, array $args, $payment, $grant, $both, $price = null, $bound = null, $extensions = null)
 {
     $e = zeam_pass_engine();
     $server = $e['server'];
     $listing = zeam_pass_listing();
     if ($payment === '') {
-        $q = $server->paymentRequired($resource, null, null, ($both ? ['admission' => 'Only admitted keys pay here, or keys with an x-grant from an admitted key.', 'contact' => zeam_pass_contact()] : ['contact' => zeam_pass_contact()]) + $listing, $price);
+        $q = $server->paymentRequired($resource, $extensions, null, ($both ? ['admission' => 'Only admitted keys pay here, or keys with an x-grant from an admitted key.', 'contact' => zeam_pass_contact()] : ['contact' => zeam_pass_contact()]) + $listing, $price);
         return zeam_pass_refusal($q['status'], $q['body'], $q['headers']);
     }
     $grantedBy = null;
@@ -365,7 +365,7 @@ function zeam_pass_serve_paid($tool, $resource, array $args, $payment, $grant, $
             $who = zeam_pass_payer_of($payload);
             $a = zeam_pass_admits_payer($who, $grant, $tool);
             if (!$a['ok'] && $a['code'] === 'bad_grant') {
-                $q = $server->paymentRequired($resource, null, null, ['admission' => 'Only admitted keys pay here, or keys with an x-grant from an admitted key.', 'contact' => zeam_pass_contact()] + $listing + ['error' => 'bad_grant'], $price);
+                $q = $server->paymentRequired($resource, $extensions, null, ['admission' => 'Only admitted keys pay here, or keys with an x-grant from an admitted key.', 'contact' => zeam_pass_contact()] + $listing + ['error' => 'bad_grant'], $price);
                 return zeam_pass_refusal(402, array_merge($q['body'], ['message' => $a['why'], 'how' => ZEAM_PASS_BAD_GRANT_HOW]), $q['headers']);
             }
             if (!$a['ok']) {

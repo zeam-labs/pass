@@ -181,7 +181,11 @@ $0.05.
    `maxLength`, and the same for an object argument's properties, 1 level deep). Bad arguments: HTTP 400 (MCP: an
    `isError` result); nothing held, nothing charged, no chain read. An unpaid call to a paid tool with no arguments
    (no body, `{}`) gets the 402 of step 2.
-2. **paywall:** no payment answers 402 with the x402 `batch-settlement` terms. A payment is verified as the x402
+2. **paywall:** no payment answers 402 with the x402 `batch-settlement` terms. The 402 of a `tool()` carries the
+   x402 `bazaar` discovery extension (`extensions.bazaar`: how to call it, its `inputSchema`, and its `outputSchema`
+   if you give one in `tool({ outputSchema })`, else "any JSON") so x402 directories can list it. In the
+   `PAYMENT-REQUIRED` header while the extension is at most 4,096 bytes and the header at most 12,288; past that, in
+   the body only. A payment is verified as the x402
    SDK's facilitator verifies it (voucher signature, channel binding, chain balance, cumulative amount) and the
    channel is held. **gate:** the zero-value x402 `exact` signature is verified offline (nothing is paid; the key
    needs no funds), replay is refused, grants are checked, 1 check is counted. **both:** the payer must be admitted

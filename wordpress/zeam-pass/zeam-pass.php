@@ -3,7 +3,7 @@
  * Plugin Name: ZEAM Pass
  * Plugin URI: https://zeampass.com
  * Description: Put a gate, a paywall or both in front of your posts for AI agents, on your own site. Agents search and read over MCP and over x402 HTTP. No sign-up and no account: install, connect the wallet you are paid to, choose. Your earnings go to your own split, 90.01% to your wallet.
- * Version: 1.0.5
+ * Version: 1.0.6
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ZEAM Labs, LLC
@@ -29,7 +29,7 @@ const ZEAM_PASS_LINE_OPS = ['open', 'prove', 'on', 'off', 'status', 'close'];
 const ZEAM_PASS_TIME_TOOLS = ['buy_time', 'line'];
 const ZEAM_PASS_BUILTIN_TOOLS = ['search_posts', 'read_post'];
 const ZEAM_PASS_NO_UNITS = 'the tool reported no units. Nothing was charged.';
-const ZEAM_PASS_VERSION = '1.0.5';
+const ZEAM_PASS_VERSION = '1.0.6';
 const ZEAM_PASS_RESULT_NOT_JSON = 'the result is not valid JSON (a non-finite number or a non-JSON value); nothing was charged';
 
 require_once __DIR__ . '/lib/autoload.php';
@@ -502,7 +502,7 @@ function zeam_pass_serve($tool, $path, $resource, $args, array $payment_headers,
         } catch (Throwable $e) {
             return $probe ? zeam_pass_refusal($bad['status'], $bad) + ['arguments' => true] : zeam_pass_refusal(500, ['error' => 'price_invalid', 'tool' => $tool, 'message' => \ZeamPass\message($e)]);
         }
-        return zeam_pass_serve_paid($tool, $res, $args, $payment, $grant, zeam_pass_mode() === 'both', $price, $timed ? zeam_pass_time_meter()->callMs($price['micro']) : null);
+        return zeam_pass_serve_paid($tool, $res, $args, $payment, $grant, zeam_pass_mode() === 'both', $price, $timed ? zeam_pass_time_meter()->callMs($price['micro']) : null, \ZeamPass\Bazaar::extension(['name' => $tool] + $t, strpos((string) $path, 'mcp:') === 0 ? 'mcp' : 'http'));
     } catch (Throwable $e) {
         return zeam_pass_refusal(503, ['error' => 'payment_unavailable', 'message' => 'the payment check failed; nothing was charged. Retry.']);
     }

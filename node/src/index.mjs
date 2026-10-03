@@ -2,6 +2,7 @@ import { GRANTED_BY, createEngine } from './engine/index.mjs'
 import { randomBytes } from 'node:crypto'
 import { FreeLimit, describe as describePrice, priceOf, usd } from './engine/pricing.mjs'
 import { timeText } from './engine/meter.mjs'
+import { bazaar } from './engine/bazaar.mjs'
 import { StateFile } from './engine/stores.mjs'
 
 const META_PAYMENT = 'x402/payment'
@@ -181,7 +182,8 @@ function pass(options = {}) {
     const payment = first(header('payment-signature'), header('x-payment'))
     const grant = first(header('x-grant'))
     const tool = described ?? { name: path }
-    const r = await engine.check({ tool: { name: tool.name, description: tool.description }, resource, payment, grant, refundUrl, price, listing: listing(String(refundUrl ?? '').replace(/\/refund$/, '')) })
+    const extensions = bazaar(tool, String(path).startsWith('mcp:') ? 'mcp' : 'http')
+    const r = await engine.check({ tool: { name: tool.name, description: tool.description }, resource, payment, grant, refundUrl, price, listing: listing(String(refundUrl ?? '').replace(/\/refund$/, '')), extensions })
     return r.ok ? { ok: true, ticket: r.ticket, status: 200, headers: {}, body: {} } : { ok: false, status: r.status, headers: r.headers ?? {}, body: r.body }
   }
 
@@ -311,6 +313,7 @@ function pass(options = {}) {
   }
 
   const describe = (t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema, _meta: { [META_PRICE]: priceTag(t) } })
+  const offer = (t) => ({ ...describe(t), ...(kind(t.outputSchema) === 'object' ? { outputSchema: t.outputSchema } : {}) })
   const listTools = () => [...tools.values()].map(describe)
   const names = () => [...tools.keys()]
 
@@ -327,7 +330,7 @@ function pass(options = {}) {
   async function terms(t, path, header, resource, refundUrl) {
     let price
     try { price = engine.mode === 'gate' ? null : priceFor(t, {}) } catch { return null }
-    const q = await check({ path, header, resource, tool: describe(t), refundUrl, price })
+    const q = await check({ path, header, resource, tool: offer(t), refundUrl, price })
     return q.ok ? null : q
   }
 
@@ -363,7 +366,7 @@ function pass(options = {}) {
     let price
     try { price = engine.mode === 'gate' ? null : priceFor(t, args) } catch (e) { return json(500, { error: 'price_invalid', tool: toolName, message: message(e) }) }
     const bound = t.meter === 'time' ? meter.callMs(price.micro) : null
-    const g = await gate({ path: `/v1/${toolName}`, header: (h) => request.headers.get(h), resource: publicUrl(request.url), tool: describe(t), refundUrl, price, args }, (ctx) => (bound === null ? perform(t, args, ctx) : within(bound, (signal) => perform(t, args, { ...ctx, signal }))), (r) => r.isError)
+    const g = await gate({ path: `/v1/${toolName}`, header: (h) => request.headers.get(h), resource: publicUrl(request.url), tool: offer(t), refundUrl, price, args }, (ctx) => (bound === null ? perform(t, args, ctx) : within(bound, (signal) => perform(t, args, { ...ctx, signal }))), (r) => r.isError)
     if (g.refused) return json(g.refused.status, g.refused.body, g.refused.headers)
     if (g.threw && g.error?.code === 'out_of_time') return json(402, outOfTime(false, bound))
     if (g.failed) return json(500, { error: 'tool_failed', message: g.threw ? message(g.error) : said(g.value.value), tool: toolName })
@@ -403,7 +406,7 @@ function pass(options = {}) {
     let price
     try { price = engine.mode === 'gate' ? null : priceFor(t, args) } catch (e) { return failure({ error: 'price_invalid', tool: t.name, message: message(e) }) }
     const bound = t.meter === 'time' ? meter.callMs(price.micro) : null
-    const g = await gate({ path: `mcp:${t.name}`, header: payHeader(params._meta?.[META_PAYMENT], grant), resource, tool: describe(t), refundUrl, price, args }, (ctx) => (bound === null ? perform(t, args, ctx) : within(bound, (signal) => perform(t, args, { ...ctx, signal }))), (r) => r.isError)
+    const g = await gate({ path: `mcp:${t.name}`, header: payHeader(params._meta?.[META_PAYMENT], grant), resource, tool: offer(t), refundUrl, price, args }, (ctx) => (bound === null ? perform(t, args, ctx) : within(bound, (signal) => perform(t, args, { ...ctx, signal }))), (r) => r.isError)
     if (g.refused) return refusal(g.refused)
     if (g.threw && g.error?.code === 'out_of_time') return failure(outOfTime(false, bound))
     if (g.threw) return failure({ error: 'tool_failed', tool: t.name, message: message(g.error) })
@@ -601,8 +604,8 @@ function pass(options = {}) {
     },
   }
 
-  function paid(toolName, handler, { description, inputSchema, resource, price } = {}) {
-    const described = description !== undefined || inputSchema !== undefined ? { name: toolName, ...(description !== undefined ? { description } : {}), ...(inputSchema !== undefined ? { inputSchema } : {}) } : undefined
+  function paid(toolName, handler, { description, inputSchema, outputSchema, resource, price } = {}) {
+    const described = description !== undefined || inputSchema !== undefined ? { name: toolName, ...(description !== undefined ? { description } : {}), ...(inputSchema !== undefined ? { inputSchema } : {}), ...(inputSchema !== undefined && outputSchema !== undefined ? { outputSchema } : {}) } : undefined
     const priced = { name: toolName, ...(price !== undefined ? { price } : {}) }
     if (engine.mode !== 'gate' && (ownPrice(priced) || typeof o.prices !== 'function')) priceFor(priced)
     return async (...args) => {

@@ -13,6 +13,7 @@ import threading
 import urllib.parse
 
 from .engine import DEFAULT_CREDITS, DEFAULT_RELAY, DEFAULT_RPC, GRANTED_BY, Engine
+from .engine.bazaar import bazaar
 from .engine.meter import time_text
 from .engine.pricing import FreeLimit, deadline_ms, metered, price_of, running, units, usd
 from .engine.pricing import describe as describe_price
@@ -231,7 +232,7 @@ class _RpcError(Exception):
 class Pass:
 
     def __init__(self, name, payout=None, mode="paywall", price=None, site=None, admit=None, relay=DEFAULT_RELAY,
-                 credits=DEFAULT_CREDITS, rpc=DEFAULT_RPC, state_dir=None, server_name=None, version="1.0.4", on_empty="refuse",
+                 credits=DEFAULT_CREDITS, rpc=DEFAULT_RPC, state_dir=None, server_name=None, version="1.0.5", on_empty="refuse",
                  fee_recipient=None, credit_issuer=None, refund_url=None, tick_seconds=60, relay_transport=None,
                  credits_http=None, settings=None, contact=None, payout_is_fee_recipient=False, prices=None, free=None, free_limit=None, time=None):
         self.name = name
@@ -294,7 +295,7 @@ class Pass:
     def payout_now(self):
         return self.engine.payout_now()
 
-    def tool(self, name=None, description="", input_schema=None, price=None, unit=None, free=False, meter=None):
+    def tool(self, name=None, description="", input_schema=None, price=None, unit=None, free=False, meter=None, output_schema=None):
         def register(fn):
             t = {
                 "name": name or fn.__name__,
@@ -305,6 +306,8 @@ class Pass:
                 "unit": unit,
                 "free": free is True,
             }
+            if isinstance(output_schema, dict):
+                t["outputSchema"] = output_schema
             if (self._tools.get(t["name"]) or {}).get("builtin"):
                 raise ValueError(f"Pass: {t['name']} is a built-in tool")
             if meter is not None and meter != "time":
@@ -416,7 +419,7 @@ class Pass:
         return {"credit": lambda hold: self.meter.credit(hold["channelId"], ms, hold["pendingId"]),
                 "undo": lambda hold: self.meter.uncredit(hold["channelId"], ms, hold["pendingId"])}
 
-    def _serve(self, tool, args, url, payment, grant, refund_url=None, price=None):
+    def _serve(self, tool, args, url, payment, grant, refund_url=None, price=None, via="http"):
         resource = Engine.resource(url, tool["description"])
         if tool.get("meter") == "time" and price is not None:
             bound = self.meter.call_ms(price["micro"])
@@ -424,7 +427,7 @@ class Pass:
         else:
             run = lambda: self._run(tool, args)
         base = re.sub(r"/refund$", "", refund_url or "")
-        return self.engine.serve(tool["name"], resource, payment, grant, run, refund_url, price, self._listing(base), self._bought(tool, args))
+        return self.engine.serve(tool["name"], resource, payment, grant, run, refund_url, price, self._listing(base), self._bought(tool, args), bazaar(tool, via))
 
     @staticmethod
     def _timed_out(s):
@@ -511,12 +514,12 @@ class Pass:
     def _probe(self, tool, args, payment, credential):
         return payment == "" and isinstance(args, dict) and not args and not tool.get("builtin") and not self._is_free(tool) and not (tool.get("meter") == "time" and credential)
 
-    def _probe_terms(self, tool, resource, grant, refund_url):
+    def _probe_terms(self, tool, resource, grant, refund_url, via="http"):
         try:
             price = None if self.mode == "gate" else self._price_for(tool, {})
         except Exception:
             return None
-        s = self._serve(tool, {}, resource, "", grant, refund_url, price)
+        s = self._serve(tool, {}, resource, "", grant, refund_url, price, via)
         return None if s.get("delivered") or s.get("failed") else s
 
     def _price_or_refusal(self, tool, args):
@@ -627,7 +630,7 @@ class Pass:
         wrong = _validate(tool["inputSchema"], args)
         credential = meta.get(META_LINE).strip() if isinstance(meta.get(META_LINE), str) and meta[META_LINE].strip() else (line or "").strip()
         if wrong and self._probe(tool, args, "paid" if payment else "", credential):
-            s = self._probe_terms(tool, resource, grant, refund_url)
+            s = self._probe_terms(tool, resource, grant, refund_url, "mcp")
             if s:
                 return self._payment_result(s)
         if wrong:
@@ -649,7 +652,7 @@ class Pass:
         price, invalid = self._price_or_refusal(tool, args)
         if invalid:
             return _failure(invalid)
-        s = self._serve(tool, args, resource, _b64(payment) if payment else "", grant, refund_url, price)
+        s = self._serve(tool, args, resource, _b64(payment) if payment else "", grant, refund_url, price, "mcp")
         if self._timed_out(s):
             return _failure(s["body"])
         if s.get("failed"):

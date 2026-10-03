@@ -229,7 +229,7 @@ class Engine:
         except Exception:
             return None
 
-    def serve(self, tool, resource, payment, grant, run, refund_url=None, price=None, listing=None, bought=None):
+    def serve(self, tool, resource, payment, grant, run, refund_url=None, price=None, listing=None, bought=None, extensions=None):
         self.start()
         if not self.ready():
             return refusal(503, {"error": "not_ready", "message": "this site has not finished setting up ZEAM Pass"})
@@ -238,7 +238,7 @@ class Engine:
         try:
             if self.mode == "gate":
                 return self._serve_gate(tool, resource, payment, grant, run)
-            return self._serve_paid(tool, resource, payment, grant, run, self.mode == "both", refund_url, price, listing or {}, bought)
+            return self._serve_paid(tool, resource, payment, grant, run, self.mode == "both", refund_url, price, listing or {}, bought, extensions)
         except _ToolRaised as e:
             raise e.error
         except Exception:
@@ -251,11 +251,11 @@ class Engine:
         except Exception as e:
             raise _ToolRaised(e) from e
 
-    def _serve_paid(self, tool, resource, payment, grant, run, both, refund_url=None, price=None, listing=None, bought=None):
+    def _serve_paid(self, tool, resource, payment, grant, run, both, refund_url=None, price=None, listing=None, bought=None, extensions=None):
         server = self.parts()["server"]
         listing = listing or {}
         if payment == "":
-            q = server.payment_required(resource, None, refund_url, {"admission": ADMISSION, **self.reach, **listing} if both else {**self.reach, **listing}, price)
+            q = server.payment_required(resource, extensions, refund_url, {"admission": ADMISSION, **self.reach, **listing} if both else {**self.reach, **listing}, price)
             return refusal(q["status"], q["body"], q["headers"])
         granted_by = None
         if both:
@@ -264,7 +264,7 @@ class Engine:
                 who = Engine.payer_of(payload)
                 a = self.admits_payer(who, grant, tool)
                 if not a["ok"] and a["code"] == "bad_grant":
-                    q = server.payment_required(resource, None, refund_url, {"admission": ADMISSION, **self.reach, **listing, "error": "bad_grant"}, price)
+                    q = server.payment_required(resource, extensions, refund_url, {"admission": ADMISSION, **self.reach, **listing, "error": "bad_grant"}, price)
                     return refusal(402, {**q["body"], "message": a["why"], "how": BAD_GRANT_HOW}, q["headers"])
                 if not a["ok"]:
                     return refusal(403, {"error": "refused", "message": a["why"], "how": self.refused_how, **self.reach})

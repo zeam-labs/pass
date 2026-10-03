@@ -28,7 +28,10 @@ structure, names and behavior, and pass the same shared fixtures.
    absent, null or `{}`) to a paid tool answers the unpaid 402 of step 2, nothing run (a price that cannot be read
    for it: the 400).
 2. By mode:
-   - **paywall:** no payment → 402 from `paymentRequired`. Else `verifyAndHold`, run the tool, then `settle` on
+   - **paywall:** no payment → 402 from `paymentRequired`, with the x402 `bazaar` discovery extension
+     (`Bazaar`: `extensions.bazaar`, HTTP or MCP form, the tool's `inputSchema` with an example body built from it,
+     its `outputSchema` or "any JSON"); `PAYMENT-REQUIRED` leaves it out when it is over 4,096 bytes or the header
+     over 12,288, and the body keeps it. Else `verifyAndHold`, run the tool, then `settle` on
      success (PAYMENT-RESPONSE / MCP `_meta["x402/payment-response"]`) or `release` on failure. A failed settle
      delivers nothing.
    - **gate:** `Admission.admit` with PAYMENT-SIGNATURE and `x-grant`, then `Meter.charge`, then run. The proof is a

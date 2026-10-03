@@ -16,7 +16,7 @@ decisions.
 ## Set up
 
 1. **Install the plugin:** Node `@zeam-labs/pass`, Python `zeam-pass`, WordPress `ZEAM Pass`: `npm install @zeam-labs/pass`
-   (Node ≥18) / `pip install zeam-pass` (Python ≥3.9) / download https://zeampass.com/downloads/zeam-pass-1.0.5.zip and use
+   (Node ≥18) / `pip install zeam-pass` (Python ≥3.9) / download https://zeampass.com/downloads/zeam-pass-1.0.6.zip and use
    Plugins → Add New → Upload Plugin.
 2. **Connect your payout wallet.** Your earnings go there. It admits no one; the gate admits the keys you list.
 3. **Choose** gate, paywall or both. Paywall: set a price per call. Gate: list the keys you admit.
@@ -39,7 +39,8 @@ Your site serves your tools:
 - **HTTP** at `POST /v1/<tool>`, with the x402 headers, and `/openapi.json`.
 
 Arguments are checked before any charge; an unpaid call with no arguments, as x402 directories send to read the
-price, gets the 402 with your terms. The plugin verifies the payment, holds it while your tool runs, and settles
+price, gets the 402 with your terms. The 402 carries the x402 `bazaar` discovery extension: how to call the tool,
+its input schema and its output schema, so x402 directories can list it. The plugin verifies the payment, holds it while your tool runs, and settles
 it only if the tool succeeds, whether or not the agent is still connected to receive the answer.
 
 Prices per tool:

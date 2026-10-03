@@ -1,6 +1,6 @@
 [project]
 name = "zeam-pass"
-version = "1.0.4"
+version = "1.0.5"
 license = "GPL-2.0-only"
 license-files = ["LICENSE"]
 authors = [{name = "ZEAM Labs, LLC", email = "info@zeamlabs.com"}]

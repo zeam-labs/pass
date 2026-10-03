@@ -109,6 +109,11 @@ The Python plugin does not read `pass.json`.
 
 - `name`, `description`, `input_schema` (default the function's name and
   docstring, `{"type": "object"}`).
+- `output_schema` (default none): the JSON Schema of the result, for the x402
+  `bazaar` discovery extension the 402 carries (`extensions.bazaar`: how to
+  call the tool, `input_schema`, `output_schema` or "any JSON"). In the
+  `PAYMENT-REQUIRED` header while the extension is at most 4,096 bytes and the
+  header at most 12,288; past that, in the body only.
 - `price` (default `prices[name]`, then `price`): USD per call; an invalid
   price raises at registration.
 - `unit` (default none): USD per unit: the call reserves `price`; the tool
