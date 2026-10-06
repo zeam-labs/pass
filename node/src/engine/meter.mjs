@@ -9,75 +9,112 @@ const KEEP_NONCES = 8
 const KEEP_LINES = 8
 
 export const Clock = {
+  HOLD_MS: 2000,
+  KEEP_DONE: 512,
+
   fresh(channelId) {
-    return { channelId: String(channelId).toLowerCase(), balanceMs: 0, spentMs: 0, returnedMs: 0, on: false, since: null, lastActive: null, calls: {}, credited: [], nonces: {}, lines: [] }
+    return { channelId: String(channelId).toLowerCase(), balanceMs: 0, spentMs: 0, returnedMs: 0, on: false, since: null, lastActive: null, calls: {}, done: [], credited: [], nonces: {}, lines: [] }
+  },
+
+  merged(intervals) {
+    const sorted = intervals.filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    const out = []
+    for (const [s, e] of sorted) {
+      const last = out[out.length - 1]
+      if (last && s <= last[1]) last[1] = Math.max(last[1], e)
+      else out.push([s, e])
+    }
+    return out
   },
 
   covered(intervals) {
-    const sorted = intervals.filter(([s, e]) => e > s).sort((a, b) => a[0] - b[0] || a[1] - b[1])
-    let total = 0
-    let end = -Infinity
-    for (const [s, e] of sorted) {
-      if (s >= end) {
-        total += e - s
-        end = e
-      } else if (e > end) {
-        total += e - end
-        end = e
-      }
-    }
-    return total
+    return Clock.merged(intervals).reduce((total, [s, e]) => total + (e - s), 0)
+  },
+
+  spans(rec, from, to, idleMs = 0) {
+    const out = (rec.done ?? []).map(([s, e]) => [Math.max(s, from), Math.min(e, to)])
+    for (const c of Object.values(rec.calls)) out.push([Math.max(c.start, from), Math.min(to, c.deadline)])
+    if (rec.on && idleMs > 0 && rec.lastActive !== null) out.push([Math.max(rec.lastActive, from), Math.min(to, rec.lastActive + idleMs)])
+    return out
   },
 
   settle(rec, now, idleMs = 0) {
     const r = rec
+    r.done = r.done ?? []
     if (r.since === null) {
       r.since = now
       for (const [id, c] of Object.entries(r.calls)) if (c.deadline <= now) delete r.calls[id]
       return r
     }
-    const since = r.since
-    const spans = Object.values(r.calls).map((c) => [Math.max(c.start, since), Math.min(now, c.deadline)])
-    if (r.on && idleMs > 0 && r.lastActive !== null) spans.push([Math.max(r.lastActive, since), Math.min(now, r.lastActive + idleMs)])
-    const burned = Math.min(r.balanceMs, Clock.covered(spans))
+    for (const [id, c] of Object.entries(r.calls)) {
+      if (c.deadline > now) continue
+      r.done.push([c.start, c.deadline])
+      delete r.calls[id]
+    }
+    r.done = Clock.merged(r.done)
+    let horizon = Math.max(r.since, now - Clock.HOLD_MS)
+    if (r.done.length > Clock.KEEP_DONE) horizon = Math.max(horizon, Math.min(now, r.done[r.done.length - Clock.KEEP_DONE - 1][1]))
+    const burned = Math.min(r.balanceMs, Clock.covered(Clock.spans(r, r.since, horizon, idleMs)))
     r.balanceMs -= burned
     r.spentMs += burned
-    r.since = now
-    for (const [id, c] of Object.entries(r.calls)) if (c.deadline <= now) delete r.calls[id]
+    r.since = horizon
+    r.done = r.done.filter(([, e]) => e > horizon).map(([s, e]) => [Math.max(s, horizon), e])
     return r
   },
 
+  pending(rec, now, idleMs = 0) {
+    return Math.min(rec.balanceMs, Clock.covered(Clock.spans(rec, rec.since ?? now, now, idleMs)))
+  },
+
+  left(rec, now, idleMs = 0) {
+    return rec.balanceMs - Clock.pending(rec, now, idleMs)
+  },
+
   remaining(rec, now, idleMs = 0) {
-    return Clock.settle(structuredClone(rec), now, idleMs).balanceMs
+    return Clock.left(Clock.settle(structuredClone(rec), now, idleMs), now, idleMs)
+  },
+
+  spent(rec, now, idleMs = 0) {
+    const r = Clock.settle(structuredClone(rec), now, idleMs)
+    return r.spentMs + Clock.pending(r, now, idleMs)
+  },
+
+  active(rec, at, idleMs = 0) {
+    if (rec.on && idleMs > 0 && rec.lastActive !== null && at > rec.lastActive) rec.done.push([rec.lastActive, Math.min(at, rec.lastActive + idleMs)])
+    rec.lastActive = Math.max(rec.lastActive ?? at, at)
   },
 
   switch(rec, on, now, idleMs = 0) {
     Clock.settle(rec, now, idleMs)
+    Clock.active(rec, now, idleMs)
     rec.on = on
-    rec.since = now
-    if (on) rec.lastActive = now
     return rec
   },
 
   begin(rec, id, now, idleMs = 0) {
     Clock.settle(rec, now, idleMs)
     if (!rec.on) return { ok: false, code: 'meter_off' }
-    if (rec.balanceMs <= 0) return { ok: false, code: 'out_of_time' }
-    const deadline = now + rec.balanceMs
+    const left = Clock.left(rec, now, idleMs)
+    if (left <= 0) return { ok: false, code: 'out_of_time' }
+    Clock.active(rec, now, idleMs)
+    const deadline = now + left
     rec.calls[id] = { start: now, deadline }
-    rec.lastActive = now
     return { ok: true, deadline }
   },
 
   end(rec, id, now, idleMs = 0, start = null, stop = null) {
+    rec.done = rec.done ?? []
     const c = rec.calls[id] ?? null
     const ran = Math.min(stop ?? now, now)
-    const at = Math.max(ran, rec.since ?? -Infinity)
-    if (c && start !== null && start > c.start && ran <= c.deadline) c.start = Math.min(start, ran)
-    Clock.settle(rec, at, idleMs)
-    delete rec.calls[id]
-    rec.lastActive = Math.max(rec.lastActive ?? ran, ran)
-    return { elapsedMs: c ? ran - c.start : 0, over: c === null || ran > c.deadline }
+    let from = c === null ? ran : c.start
+    if (c !== null) {
+      if (start !== null && start > c.start && ran <= c.deadline) from = Math.min(start, ran)
+      rec.done.push([from, Math.min(ran, c.deadline)])
+      delete rec.calls[id]
+    }
+    Clock.active(rec, ran, idleMs)
+    Clock.settle(rec, now, idleMs)
+    return { elapsedMs: c === null ? 0 : ran - from, over: c === null || ran > c.deadline }
   },
 
   buy(rec, ms, key, now, idleMs = 0) {
@@ -91,24 +128,28 @@ export const Clock = {
   unbuy(rec, ms, key, now, idleMs = 0) {
     if (!rec.credited.includes(key)) return 0
     Clock.settle(rec, now, idleMs)
-    const taken = Math.min(ms, rec.balanceMs)
+    const taken = Math.max(0, Math.min(ms, Clock.left(rec, now, idleMs)))
     rec.balanceMs -= taken
     rec.credited = rec.credited.filter((k) => k !== key)
     return taken
   },
 
-  unburnedMicro(rec, now, idleMs, blockMicro, blockMs) {
+  unburnedMicro(rec, now, idleMs, rateMicro, rateMs) {
     const left = Clock.remaining(rec, now, idleMs)
-    return Math.floor((left * blockMicro + blockMs - 1) / blockMs)
+    return Math.floor((left * rateMicro + rateMs - 1) / rateMs)
   },
 
   forget(rec, now, idleMs = 0) {
     Clock.settle(rec, now, idleMs)
-    const returned = rec.balanceMs
+    const burning = Clock.pending(rec, now, idleMs)
+    const returned = rec.balanceMs - burning
+    rec.spentMs += burning
     rec.returnedMs += returned
     rec.balanceMs = 0
     rec.on = false
     rec.calls = {}
+    rec.done = []
+    rec.since = now
     return returned
   },
 
@@ -117,22 +158,40 @@ export const Clock = {
   },
 }
 
+const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b))
+
 export function timeOptions(o) {
   if (o === undefined || o === null || o === false) return null
-  if (typeof o !== 'object') throw new TypeError('pass: time is { block: "0.00025", blockMs: 250 }')
-  const blockMicro = microOf(o.block, 'time.block')
-  const blockMs = o.blockMs === undefined ? 250 : Math.trunc(Number(o.blockMs))
+  if (typeof o !== 'object') throw new TypeError('pass: time is { usd: "0.00025", ms: 250 }: that many dollars buys that many milliseconds')
+  const micro = microOf(o.usd ?? o.block, 'time.usd')
+  const given = o.ms ?? o.blockMs
+  const ms = given === undefined ? 250 : Math.trunc(Number(given))
   const idleMs = o.idleMs === undefined ? 0 : Math.trunc(Number(o.idleMs))
-  const maxBlocks = o.maxBlocks === undefined ? Math.min(14400, Math.floor(1e9 / blockMicro)) : Math.trunc(Number(o.maxBlocks))
-  if (!(blockMs >= 1 && blockMs <= 3600000)) throw new TypeError('pass: time.blockMs is 1 to 3600000')
+  if (!(ms >= 1 && ms <= 3600000)) throw new TypeError('pass: time.ms is 1 to 3600000')
   if (!(idleMs >= 0 && idleMs <= 3600000)) throw new TypeError('pass: time.idleMs is 0 to 3600000')
-  if (!(maxBlocks >= 1 && maxBlocks * blockMicro <= 1e9)) throw new TypeError('pass: time.maxBlocks is 1 or more, and at most $1,000 of blocks')
-  return { blockMicro, blockMs, idleMs, maxBlocks }
+  const legacyCap = o.maxBlocks === undefined || o.maxBlocks === null ? undefined : Number(o.maxBlocks) * ms
+  const cap = o.maxMs ?? legacyCap
+  const maxMs = cap === undefined || cap === null ? null : Math.trunc(Number(cap))
+  const g = gcd(micro, ms)
+  const rateMicro = micro / g
+  const rateMs = ms / g
+  if (maxMs !== null && !(maxMs >= rateMs && maxMs % rateMs === 0)) throw new TypeError(`pass: time.maxMs is a multiple of ${rateMs} ms, the smallest amount this price sells; leave it out for no maximum`)
+  return { rateMicro, rateMs, unitMs: ms, idleMs, maxMs }
+}
+
+export const timeRate = (t) => `$${usd(t.rateMicro)} per ${t.rateMs === 1 ? 'ms' : `${t.rateMs} ms`}`
+
+export function boughtMs(t, args) {
+  if (Number.isSafeInteger(args?.ms)) return args.ms
+  if (Number.isSafeInteger(args?.blocks) && args.blocks >= 1) return args.blocks * t.unitMs
+  return t.unitMs
 }
 
 export function timeText(t, base = '') {
   const idle = t.idleMs > 0 ? ` and ${t.idleMs} ms after each` : ''
-  return `Line time: $${usd(t.blockMicro)} per ${t.blockMs} ms block. buy_time {blocks} (1 to ${t.maxBlocks}); the time is credited to the paying channel once the payment settles. Open a line: POST ${base}/line {"op":"open","channelId"}, sign the message it returns with the payer key, POST {"op":"prove","channelId","nonce","signature"}. Send the credential as x-line (MCP: _meta["zeam-pass/line"]). Time burns while a call runs on the line${idle}; a call stops when the time runs out. {"op":"off"}: no new calls on the line; a running call burns to its end. Unburned time comes back with a refund.`
+  const step = t.rateMs > 1 ? ` in steps of ${t.rateMs} ms` : ''
+  const most = t.maxMs ? ` (up to ${t.maxMs} ms a purchase)` : ''
+  return `Line time: ${timeRate(t)}. buy_time {ms}${step}${most}; buying again adds time; the time is credited to the paying channel once the payment settles. Open a line: POST ${base}/line {"op":"open","channelId"}, sign the message it returns with the payer key, POST {"op":"prove","channelId","nonce","signature"}. Send the credential as x-line (MCP: _meta["zeam-pass/line"]). Time burns while a call runs on the line${idle}; a call stops when the time runs out. {"op":"off"}: no new calls on the line; a running call burns to its end. Unburned time comes back with a refund.`
 }
 
 export class TimeMeter {
@@ -147,12 +206,8 @@ export class TimeMeter {
     return '0x' + createHash('sha256').update(String(credential)).digest('hex')
   }
 
-  msOf(blocks) {
-    return blocks * this.t.blockMs
-  }
-
   callMs(priceMicro) {
-    return Math.floor((priceMicro * this.t.blockMs) / this.t.blockMicro)
+    return Math.floor((priceMicro * this.t.rateMs) / this.t.rateMicro)
   }
 
   async change(channelId, fn) {
@@ -168,7 +223,7 @@ export class TimeMeter {
   async status(channelId) {
     const rec = (await this.clocks.get(channelId)) ?? Clock.fresh(channelId)
     const now = this.now()
-    return { channelId: rec.channelId, msRemaining: Clock.remaining(rec, now, this.t.idleMs), msSpent: Clock.settle(structuredClone(rec), now, this.t.idleMs).spentMs, msReturned: rec.returnedMs, metering: rec.on, blockMs: this.t.blockMs, blockUSD: usd(this.t.blockMicro) }
+    return { channelId: rec.channelId, msRemaining: Clock.remaining(rec, now, this.t.idleMs), msSpent: Clock.spent(rec, now, this.t.idleMs), msReturned: rec.returnedMs, metering: rec.on, rateUSD: usd(this.t.rateMicro), rateMs: this.t.rateMs }
   }
 
   credit(channelId, ms, key) {
@@ -180,7 +235,7 @@ export class TimeMeter {
   }
 
   switch(channelId, on) {
-    return this.change(channelId, (rec) => { Clock.switch(rec, on, this.now(), this.t.idleMs); return rec.balanceMs })
+    return this.change(channelId, (rec) => { const now = this.now(); Clock.switch(rec, on, now, this.t.idleMs); return Clock.left(rec, now, this.t.idleMs) })
   }
 
   async begin(channelId, id) {
@@ -189,7 +244,7 @@ export class TimeMeter {
   }
 
   end(channelId, id, started = null, stopped = null) {
-    return this.change(channelId, (rec) => ({ ...Clock.end(rec, id, this.now(), this.t.idleMs, started, stopped), msRemaining: rec.balanceMs }))
+    return this.change(channelId, (rec) => { const now = this.now(); return { ...Clock.end(rec, id, now, this.t.idleMs, started, stopped), msRemaining: Clock.left(rec, now, this.t.idleMs) } })
   }
 
   stop(channelId) {
@@ -209,7 +264,7 @@ export class TimeMeter {
 
   async unburnedMicro(channelId) {
     const rec = await this.clocks.get(channelId)
-    return rec === null ? 0 : Clock.unburnedMicro(rec, this.now(), this.t.idleMs, this.t.blockMicro, this.t.blockMs)
+    return rec === null ? 0 : Clock.unburnedMicro(rec, this.now(), this.t.idleMs, this.t.rateMicro, this.t.rateMs)
   }
 
   async forget(channelId) {
@@ -260,7 +315,7 @@ export class TimeMeter {
       dropped = all.slice(0, -KEEP_LINES)
       rec.lines = all.slice(-KEEP_LINES)
       Clock.switch(rec, true, now, this.t.idleMs)
-      return rec.balanceMs
+      return Clock.left(rec, now, this.t.idleMs)
     })
     for (const x of dropped) await this.lines.update(x, () => null).catch(() => {})
     return { ok: true, credential, channelId, msRemaining }

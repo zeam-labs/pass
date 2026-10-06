@@ -1,7 +1,7 @@
 import { GRANTED_BY, createEngine } from './engine/index.mjs'
 import { randomBytes } from 'node:crypto'
 import { FreeLimit, describe as describePrice, priceOf, usd } from './engine/pricing.mjs'
-import { timeText } from './engine/meter.mjs'
+import { boughtMs, timeRate, timeText } from './engine/meter.mjs'
 import { bazaar } from './engine/bazaar.mjs'
 import { StateFile } from './engine/stores.mjs'
 
@@ -55,6 +55,7 @@ function checkValue(k, p, v) {
   if (typeof v === 'number') {
     if (typeof p.minimum === 'number' && v < p.minimum) return `argument ${k} must be at least ${p.minimum}`
     if (typeof p.maximum === 'number' && v > p.maximum) return `argument ${k} must be at most ${p.maximum}`
+    if (typeof p.multipleOf === 'number' && p.multipleOf > 0 && v % p.multipleOf !== 0) return `argument ${k} must be a multiple of ${p.multipleOf}`
   }
   if (typeof v === 'string') {
     const n = [...v].length
@@ -156,17 +157,18 @@ function pass(options = {}) {
   const time = o.time
   const meter = engine.meter
   const priceFor = (t, args = {}) => {
-    if (t.builtin === 'buy_time') return { micro: (Number.isSafeInteger(args.blocks) && args.blocks >= 1 ? args.blocks : 1) * time.blockMicro, unitMicro: null }
+    if (t.builtin === 'buy_time') { const ms = boughtMs(time, args); return { micro: (ms / time.rateMs) * time.rateMicro, unitMicro: null, ms } }
     if (ownPrice(t)) return priceOf({ price: t.price, unit: t.unit }, o.priceMicroUSD)
     if (typeof o.prices === 'function') return priceOf(o.prices(t.name, args), o.priceMicroUSD)
     return priceOf(o.prices?.[t.name], o.priceMicroUSD)
   }
+  const asked = (t, args) => (t.builtin === 'buy_time' && kind(args) === 'object' && !Object.hasOwn(args, 'ms') && Number.isSafeInteger(args.blocks) && args.blocks >= 1 ? { ...args, ms: args.blocks * time.unitMs } : args)
   const priceTag = (t) => {
     if (t.builtin === 'line') return { usd: '0', per: 'call', free: true }
-    if (t.builtin === 'buy_time') return { usd: usd(time.blockMicro), per: 'block', blockMs: time.blockMs, maxBlocks: time.maxBlocks }
+    if (t.builtin === 'buy_time') return { usd: usd(time.rateMicro), per: 'ms', ms: time.rateMs, ...(time.maxMs ? { maxMs: time.maxMs } : {}) }
     if (t.meter === 'time' && !(typeof o.prices === 'function' && !ownPrice(t))) {
       const p = priceFor(t)
-      return { per: 'time', blockUSD: usd(time.blockMicro), blockMs: time.blockMs, callUSD: usd(p.micro), callMs: meter.callMs(p.micro) }
+      return { per: 'time', usd: usd(time.rateMicro), ms: time.rateMs, callUSD: usd(p.micro), callMs: meter.callMs(p.micro) }
     }
     if (isFree(t)) return describePrice(null, { free: true, perHour: o.freeLimit })
     if (engine.mode === 'gate') return { usd: '0', per: 'call' }
@@ -212,7 +214,7 @@ function pass(options = {}) {
     try { value = await exec({ ...m.ctx, channelId: c.ticket?.hold?.channelId ?? null }) } catch (e) { threw = true; error = e }
     const failed = threw || isFailure(value)
     const buying = !failed && time && c.ticket?.hold && req.tool?.name === 'buy_time' && tools.get('buy_time')?.builtin === 'buy_time'
-    const bought = buying ? { channelId: c.ticket.hold.channelId, ms: (Number.isSafeInteger(req.args?.blocks) ? req.args.blocks : 1) * time.blockMs, key: c.ticket.hold.pendingId } : null
+    const bought = buying ? { channelId: c.ticket.hold.channelId, ms: boughtMs(time, req.args), key: c.ticket.hold.pendingId } : null
     if (bought) {
       try {
         await meter.credit(bought.channelId, bought.ms, bought.key)
@@ -340,7 +342,7 @@ function pass(options = {}) {
     const raw = await request.text()
     let args
     try { args = raw.trim() ? JSON.parse(raw) : {} } catch { return json(400, { error: 'invalid_arguments', tool: toolName, message: 'the body is not JSON' }) }
-    const bad = validate(t.inputSchema, args)
+    const bad = validate(t.inputSchema, asked(t, args))
     if (bad && probe(t, args, first(request.headers.get('payment-signature'), request.headers.get('x-payment')), first(request.headers.get('x-line')))) {
       const q = await terms(t, `/v1/${toolName}`, (h) => request.headers.get(h), publicUrl(request.url), refundUrl)
       return q ? json(q.status, q.body, q.headers) : json(400, { error: 'invalid_arguments', tool: toolName, message: bad })
@@ -383,7 +385,7 @@ function pass(options = {}) {
     const t = tools.get(params.name)
     if (!t) return failure({ error: 'unknown_tool', tool: params.name, tools: names() })
     const args = params.arguments ?? {}
-    const bad = validate(t.inputSchema, args)
+    const bad = validate(t.inputSchema, asked(t, args))
     if (bad && probe(t, args, params._meta?.[META_PAYMENT] ? 'paid' : '', first(typeof params._meta?.[META_LINE] === 'string' ? params._meta[META_LINE] : '', info.line))) {
       const q = await terms(t, `mcp:${t.name}`, payHeader(null, grant), resource, refundUrl)
       return q ? refusal(q) : failure({ error: 'invalid_arguments', tool: t.name, message: bad })
@@ -653,10 +655,10 @@ function pass(options = {}) {
   }
 
   if (time) {
-    tools.set('buy_time', { name: 'buy_time', builtin: 'buy_time', description: `Buys line time: $${usd(time.blockMicro)} per ${time.blockMs} ms block, for the channel that pays. Then open a line.`, inputSchema: { type: 'object', properties: { blocks: { type: 'integer', minimum: 1, maximum: time.maxBlocks, description: `blocks of ${time.blockMs} ms; default 1` } } }, run: async (args, ctx) => {
-      const blocks = Number.isSafeInteger(args.blocks) ? args.blocks : 1
+    tools.set('buy_time', { name: 'buy_time', builtin: 'buy_time', description: `Buys line time: ${timeRate(time)}, for the channel that pays. Then open a line.`, inputSchema: { type: 'object', properties: { ms: { type: 'integer', minimum: time.rateMs, ...(time.rateMs > 1 ? { multipleOf: time.rateMs } : {}), ...(time.maxMs ? { maximum: time.maxMs } : {}), description: `milliseconds of line time; default ${time.unitMs}. Buying again adds time` } } }, run: async (args, ctx) => {
+      const ms = boughtMs(time, args)
       const st = await meter.status(ctx.channelId)
-      return { channelId: ctx.channelId, boughtMs: blocks * time.blockMs, msRemaining: st.msRemaining + blocks * time.blockMs, blockMs: time.blockMs, paidUSD: usd(blocks * time.blockMicro) }
+      return { channelId: ctx.channelId, boughtMs: ms, msRemaining: st.msRemaining + ms, paidUSD: usd((ms / time.rateMs) * time.rateMicro) }
     } })
     tools.set('line', { name: 'line', builtin: 'line', free: true, description: 'A line spends bought time without a payment per call. op: open {channelId} returns a message to sign with the payer key; prove {channelId, nonce, signature} returns the credential; on, off, status, close {credential}.', inputSchema: { type: 'object', properties: { op: { enum: LINE_OPS }, channelId: { type: 'string' }, nonce: { type: 'string' }, signature: { type: 'string' }, credential: { type: 'string' } }, required: ['op'] }, run: async (args, ctx) => {
       const l = await lineOp(args, ctx.line ?? '')

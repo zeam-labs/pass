@@ -228,9 +228,11 @@ export class GasQuote {
       const configured = this.cfg.depositFloorMicroUSD
       return Math.max(price, isNumeric(last) ? Math.trunc(Number(last)) : 0, isNumeric(configured) ? Math.trunc(Number(configured)) : 0)
     }
-    const floor = Math.ceil((gas * this.cfg.floorMargin) / this.cfg.feeShare)
+    const back = await this.refund(true, false)
+    const home = back === null ? 0 : Math.ceil(back.pay.microUSD * this.cfg.floorMargin)
+    const floor = Math.max(Math.ceil((gas * this.cfg.floorMargin) / this.cfg.feeShare), home)
     this.cfg.cache.set(key, floor, GasQuote.FLOOR_TTL)
-    return Math.max(price, floor)
+    return price >= floor ? price : Math.max(floor, price + home)
   }
 }
 

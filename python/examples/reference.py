@@ -19,7 +19,7 @@ agents = Pass(name=env["PASS_NAME"], payout=env["PASS_PAYOUT"], mode=env.get("PA
               rpc=env.get("PASS_RPC") or DEFAULT_RPC, site=env.get("PASS_SITE") or None,
               state_dir=env.get("PASS_STATE_DIR"), contact=env.get("PASS_CONTACT") or None, server_name="ZEAM Pass reference seller (Python)",
               prices=prices or None, free_limit=int(env["PASS_FREE_LIMIT"]) if env.get("PASS_FREE_LIMIT") else None,
-              time={"block": env["PASS_TIME_BLOCK"], "blockMs": int(env.get("PASS_TIME_BLOCK_MS") or 250)} if metered and env.get("PASS_TIME_BLOCK") else None)
+              time={"usd": env["PASS_TIME_BLOCK"], "ms": int(env.get("PASS_TIME_BLOCK_MS") or 250)} if metered and env.get("PASS_TIME_BLOCK") else None)
 
 
 @agents.tool(description="Multiplies two numbers.", input_schema={"type": "object", "properties": {"a": {"type": "number"}, "b": {"type": "number"}}, "required": ["a", "b"]})

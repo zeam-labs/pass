@@ -11,8 +11,7 @@ final class TimeMeter
     const NONCE_SECS = 300;
     const KEEP_NONCES = 8;
     const KEEP_LINES = 8;
-    const DEFAULT_BLOCK_MS = 250;
-    const DEFAULT_MAX_BLOCKS = 14400;
+    const DEFAULT_MS = 250;
 
     public $t;
     private $clocks;
@@ -46,34 +45,95 @@ final class TimeMeter
         return null;
     }
 
+    public static function safeInt($v)
+    {
+        if (is_float($v) && is_finite($v) && floor($v) === $v) {
+            $v = abs($v) <= 9007199254740991 ? (int) $v : null;
+        }
+        return is_int($v) && abs($v) <= 9007199254740991 ? $v : null;
+    }
+
+    private static function first(array $o, array $names)
+    {
+        foreach ($names as $name) {
+            if (array_key_exists($name, $o) && $o[$name] !== null) {
+                return $o[$name];
+            }
+        }
+        return null;
+    }
+
+    private static function gcd($a, $b)
+    {
+        while ($b !== 0) {
+            $next = $a % $b;
+            $a = $b;
+            $b = $next;
+        }
+        return $a;
+    }
+
     public static function options($o)
     {
         if ($o === null || $o === false) {
             return null;
         }
         if (!is_array($o)) {
-            throw new \InvalidArgumentException('pass: time is { block: "0.00025", blockMs: 250 }');
+            throw new \InvalidArgumentException('pass: time is { usd: "0.00025", ms: 250 }: that many dollars buys that many milliseconds');
         }
-        $blockMicro = Pricing::microOf(array_key_exists('block', $o) ? $o['block'] : null, 'time.block');
-        $blockMs = array_key_exists('blockMs', $o) && $o['blockMs'] !== null ? self::whole($o['blockMs']) : self::DEFAULT_BLOCK_MS;
+        $micro = Pricing::microOf(self::first($o, ['usd', 'block']), 'time.usd');
+        $given = self::first($o, ['ms', 'blockMs']);
+        $ms = $given !== null ? self::whole($given) : self::DEFAULT_MS;
         $idleMs = array_key_exists('idleMs', $o) && $o['idleMs'] !== null ? self::whole($o['idleMs']) : 0;
-        $maxBlocks = array_key_exists('maxBlocks', $o) && $o['maxBlocks'] !== null ? self::whole($o['maxBlocks']) : min(self::DEFAULT_MAX_BLOCKS, intdiv(1000000000, $blockMicro));
-        if (!($blockMs !== null && $blockMs >= 1 && $blockMs <= 3600000)) {
-            throw new \InvalidArgumentException('pass: time.blockMs is 1 to 3600000');
+        if (!($ms !== null && $ms >= 1 && $ms <= 3600000)) {
+            throw new \InvalidArgumentException('pass: time.ms is 1 to 3600000');
         }
         if (!($idleMs !== null && $idleMs >= 0 && $idleMs <= 3600000)) {
             throw new \InvalidArgumentException('pass: time.idleMs is 0 to 3600000');
         }
-        if (!($maxBlocks !== null && $maxBlocks >= 1 && $maxBlocks * $blockMicro <= 1000000000)) {
-            throw new \InvalidArgumentException('pass: time.maxBlocks is 1 or more, and at most $1,000 of blocks');
+        $maxMs = null;
+        $capped = false;
+        if (array_key_exists('maxMs', $o) && $o['maxMs'] !== null) {
+            $capped = true;
+            $maxMs = self::whole($o['maxMs']);
+        } elseif (array_key_exists('maxBlocks', $o) && $o['maxBlocks'] !== null) {
+            $capped = true;
+            $maxMs = is_numeric($o['maxBlocks']) ? self::whole((float) $o['maxBlocks'] * $ms) : null;
         }
-        return ['blockMicro' => $blockMicro, 'blockMs' => $blockMs, 'idleMs' => $idleMs, 'maxBlocks' => $maxBlocks];
+        $g = self::gcd($micro, $ms);
+        $rateMicro = intdiv($micro, $g);
+        $rateMs = intdiv($ms, $g);
+        if ($capped && !($maxMs !== null && $maxMs >= $rateMs && $maxMs % $rateMs === 0)) {
+            throw new \InvalidArgumentException('pass: time.maxMs is a multiple of ' . $rateMs . ' ms, the smallest amount this price sells; leave it out for no maximum');
+        }
+        return ['rateMicro' => $rateMicro, 'rateMs' => $rateMs, 'unitMs' => $ms, 'idleMs' => $idleMs, 'maxMs' => $maxMs];
+    }
+
+    public static function rate(array $t)
+    {
+        return '$' . Pricing::usd($t['rateMicro']) . ' per ' . ($t['rateMs'] === 1 ? 'ms' : $t['rateMs'] . ' ms');
+    }
+
+    public static function boughtMs(array $t, $args)
+    {
+        $a = is_array($args) ? $args : [];
+        $ms = self::safeInt($a['ms'] ?? null);
+        if ($ms !== null) {
+            return $ms;
+        }
+        $blocks = self::safeInt($a['blocks'] ?? null);
+        if ($blocks !== null && $blocks >= 1) {
+            return $blocks * $t['unitMs'];
+        }
+        return $t['unitMs'];
     }
 
     public static function text(array $t, $base = '')
     {
         $idle = $t['idleMs'] > 0 ? ' and ' . $t['idleMs'] . ' ms after each' : '';
-        return 'Line time: $' . Pricing::usd($t['blockMicro']) . ' per ' . $t['blockMs'] . ' ms block. buy_time {blocks} (1 to ' . $t['maxBlocks'] . '); the time is credited to the paying channel once the payment settles. Open a line: POST ' . $base . '/line {"op":"open","channelId"}, sign the message it returns with the payer key, POST {"op":"prove","channelId","nonce","signature"}. Send the credential as x-line (MCP: _meta["zeam-pass/line"]). Time burns while a call runs on the line' . $idle . '; a call stops when the time runs out. {"op":"off"}: no new calls on the line; a running call burns to its end. Unburned time comes back with a refund.';
+        $step = $t['rateMs'] > 1 ? ' in steps of ' . $t['rateMs'] . ' ms' : '';
+        $most = empty($t['maxMs']) ? '' : ' (up to ' . $t['maxMs'] . ' ms a purchase)';
+        return 'Line time: ' . self::rate($t) . '. buy_time {ms}' . $step . $most . '; buying again adds time; the time is credited to the paying channel once the payment settles. Open a line: POST ' . $base . '/line {"op":"open","channelId"}, sign the message it returns with the payer key, POST {"op":"prove","channelId","nonce","signature"}. Send the credential as x-line (MCP: _meta["zeam-pass/line"]). Time burns while a call runs on the line' . $idle . '; a call stops when the time runs out. {"op":"off"}: no new calls on the line; a running call burns to its end. Unburned time comes back with a refund.';
     }
 
     public static function hash($credential)
@@ -86,14 +146,9 @@ final class TimeMeter
         return (int) call_user_func($this->now);
     }
 
-    public function msOf($blocks)
-    {
-        return (int) $blocks * $this->t['blockMs'];
-    }
-
     public function callMs($priceMicro)
     {
-        return intdiv((int) $priceMicro * $this->t['blockMs'], $this->t['blockMicro']);
+        return intdiv((int) $priceMicro * $this->t['rateMs'], $this->t['rateMicro']);
     }
 
     public function change($channelId, callable $fn)
@@ -119,8 +174,8 @@ final class TimeMeter
         $rec = $this->record($channelId);
         $rec = $rec === null ? Clock::fresh($channelId) : $rec;
         $now = $this->nowMs();
-        $settled = Clock::settle($rec, $now, $this->t['idleMs']);
-        return ['channelId' => $rec['channelId'], 'msRemaining' => $settled['balanceMs'], 'msSpent' => $settled['spentMs'], 'msReturned' => $settled['returnedMs'], 'metering' => $settled['on'], 'blockMs' => $this->t['blockMs'], 'blockUSD' => Pricing::usd($this->t['blockMicro'])];
+        $idle = $this->t['idleMs'];
+        return ['channelId' => $rec['channelId'], 'msRemaining' => Clock::remaining($rec, $now, $idle), 'msSpent' => Clock::spent($rec, $now, $idle), 'msReturned' => $rec['returnedMs'], 'metering' => $rec['on'], 'rateUSD' => Pricing::usd($this->t['rateMicro']), 'rateMs' => $this->t['rateMs']];
     }
 
     public function credit($channelId, $ms, $key)
@@ -147,7 +202,7 @@ final class TimeMeter
         $idle = $this->t['idleMs'];
         return $this->change($channelId, function (array &$rec) use ($on, $now, $idle) {
             Clock::switch($rec, $on, $now, $idle);
-            return $rec['balanceMs'];
+            return Clock::left($rec, $now, $idle);
         });
     }
 
@@ -181,7 +236,7 @@ final class TimeMeter
         $now = $this->nowMs();
         $idle = $this->t['idleMs'];
         return $this->change($channelId, function (array &$rec) use ($id, $now, $idle, $started, $stopped) {
-            return Clock::end($rec, $id, $now, $idle, $started, $stopped) + ['msRemaining' => $rec['balanceMs']];
+            return Clock::end($rec, $id, $now, $idle, $started, $stopped) + ['msRemaining' => Clock::left($rec, $now, $idle)];
         });
     }
 
@@ -203,7 +258,7 @@ final class TimeMeter
     public function unburnedMicro($channelId)
     {
         $rec = $this->record($channelId);
-        return $rec === null ? 0 : Clock::unburnedMicro($rec, $this->nowMs(), $this->t['idleMs'], $this->t['blockMicro'], $this->t['blockMs']);
+        return $rec === null ? 0 : Clock::unburnedMicro($rec, $this->nowMs(), $this->t['idleMs'], $this->t['rateMicro'], $this->t['rateMs']);
     }
 
     private function drop($hash)
@@ -287,7 +342,7 @@ final class TimeMeter
             $dropped = array_slice($all, 0, max(0, count($all) - self::KEEP_LINES));
             $rec['lines'] = array_values(array_slice($all, -self::KEEP_LINES));
             Clock::switch($rec, true, $now, $idle);
-            return $rec['balanceMs'];
+            return Clock::left($rec, $now, $idle);
         });
         foreach ($dropped as $x) {
             $this->drop($x);

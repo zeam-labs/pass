@@ -400,7 +400,7 @@ function zeam_pass_serve_paid($tool, $resource, array $args, $payment, $grant, $
     }
     $bought = null;
     if ((zeam_pass_tools()[$tool]['builtin'] ?? null) === 'buy_time') {
-        $bought = ['channelId' => $hold['channelId'], 'ms' => zeam_pass_blocks($args) * zeam_pass_time()['blockMs'], 'key' => $hold['pendingId']];
+        $bought = ['channelId' => $hold['channelId'], 'ms' => zeam_pass_bought_ms($args), 'key' => $hold['pendingId']];
         try {
             zeam_pass_time_meter()->credit($bought['channelId'], $bought['ms'], $bought['key']);
         } catch (Throwable $ex) {

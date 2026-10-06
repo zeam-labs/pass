@@ -144,6 +144,9 @@ final class Pricing
 
     public static function pricing(array $price)
     {
+        if (!empty($price['ms'])) {
+            return '$' . self::usd($price['micro']) . ' for ' . $price['ms'] . ' ms of line time. Time you do not burn comes back with a refund.';
+        }
         if (isset($price['unitMicro']) && $price['unitMicro'] !== null) {
             return 'Up to $' . self::usd($price['micro']) . ' per call, reserved; charged $' . self::usd($price['unitMicro']) . ' per unit the call reports, at most the reserve. A failed call is not charged.';
         }

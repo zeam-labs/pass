@@ -94,7 +94,8 @@ The agent side: https://zeampass.com/docs/agents
   `(tool, args) => price`.
 - `free` (default `[]`): tool names served with no payment and no admission.
 - `time` (default none): line time:
-  `{ block: '0.00025', blockMs: 250, idleMs: 0, maxBlocks: 14400 }`;
+  `{ usd: '0.00025', ms: 250, idleMs: 0 }`: that many dollars buys that many milliseconds. A buyer buys any
+  number of milliseconds and buying again adds time (`maxMs: N` limits one purchase, if you want that);
   adds `buy_time`, `line` and `POST <base>/line`.
 - `freeLimit` (default none): free calls an hour per client address per tool
   (`60` or `{ perHour: 60 }`); over it: 429 `free_limit`.
@@ -159,8 +160,8 @@ $0.05.
   tool's tag in `_meta["zeam-pass/price"]`; `openapi.json` in each operation's `x-price`.
 - Tags: `{"usd":"0.02","per":"call"}`, `{"usd":"0.0001","per":"unit","upTo":"0.05"}`,
   `{"usd":"0","per":"call","free":true,"perHour":60}`, `{"per":"call","varies":true}` (a `prices` function);
-  with `time`: `buy_time` `{"usd":"0.00025","per":"block","blockMs":250,"maxBlocks":14400}` and each time tool
-  `{"per":"time","blockUSD":…,"blockMs":…,"callUSD":…,"callMs":…}`.
+  with `time`: `buy_time` `{"usd":"0.000001","per":"ms","ms":1}` and each time tool
+  `{"per":"time","usd":…,"ms":…,"callUSD":…,"callMs":…}`.
 - Usage: `meter.units(n)`, n a whole number ≥ 0. Charge = n × `unit`, at most the reserve; the rest of the reserve
   stays in the buyer's channel. `PAYMENT-RESPONSE` `extra` carries `chargedAmount` and `reservedAmount`, on every settled call. No units
   reported, or a bad n: the call fails, released, nothing charged.

@@ -45,6 +45,7 @@ export function describe(price, { free = false, perHour = null, varies = false }
 }
 
 export function pricing(price) {
+  if (price.ms) return `$${usd(price.micro)} for ${price.ms} ms of line time. Time you do not burn comes back with a refund.`
   if (price.unitMicro !== null) return `Up to $${usd(price.micro)} per call, reserved; charged $${usd(price.unitMicro)} per unit the call reports, at most the reserve. A failed call is not charged.`
   return `$${usd(price.micro)} per call. A failed call is not charged.`
 }

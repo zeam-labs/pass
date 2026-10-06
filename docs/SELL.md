@@ -16,7 +16,7 @@ decisions.
 ## Set up
 
 1. **Install the plugin:** Node `@zeam-labs/pass`, Python `zeam-pass`, WordPress `ZEAM Pass`: `npm install @zeam-labs/pass`
-   (Node ≥18) / `pip install zeam-pass` (Python ≥3.9) / download https://zeampass.com/downloads/zeam-pass-1.0.6.zip and use
+   (Node ≥18) / `pip install zeam-pass` (Python ≥3.9) / download https://zeampass.com/downloads/zeam-pass-1.0.8.zip and use
    Plugins → Add New → Upload Plugin.
 2. **Connect your payout wallet.** Your earnings go there. It admits no one; the gate admits the keys you list.
 3. **Choose** gate, paywall or both. Paywall: set a price per call. Gate: list the keys you admit.
@@ -50,11 +50,11 @@ Prices per tool:
 | per call | `price` (the default), or a tool's own price | that price per call |
 | free | `free` | nothing; optional `freeLimit`: calls an hour per address, then 429 |
 | usage | a tool's `price` and `unit`; the tool reports units | units × `unit`, at most `price` (reserved per call) |
-| time | `time: { block: "0.00025", blockMs: 250 }`; a tool's `meter: "time"` | blocks bought with `buy_time`, burned while calls run on a line; unburned time refunded |
+| time | `time: { usd: "0.00025", ms: 250 }`; a tool's `meter: "time"` | milliseconds bought with `buy_time`, burned while calls run on a line; unburned time refunded |
 
 The 402, `tools/list` (`_meta["zeam-pass/price"]`) and `/openapi.json` (`x-price`) show each tool's price.
 
-Time: the plugin adds `buy_time` and `line`. An agent buys blocks, opens a line with its payer key, and calls time
+Time: the plugin adds `buy_time` and `line`. An agent buys milliseconds, opens a line with its payer key, and calls time
 tools on it with no payment per call. Time burns while a call runs; a call stops when the time runs out. Time is
 credited only after the payment settles; you are paid only for time that burned; unburned time goes back with the
 agent's refund. Time state is in your state directory (`meter/`). Detail: [docs/AGENTS.md](../../docs/AGENTS.md),
@@ -68,8 +68,8 @@ section 2.
   transaction covers its gas at the 9.99% fee. The relay sends only what your side signed, to where it signed it.
 - **Payouts.** Automatic once a payout covers its gas. The first payout waits for about $0.10: it also creates your
   split.
-- **Deposits.** An agent's first call on a channel deposits at least the deposit floor (about $0.03; it tracks gas,
-  [docs/ENGINE.md](../../docs/ENGINE.md)); later calls spend it.
+- **Deposits.** An agent's first call on a channel deposits at least the deposit floor (about $0.03; it tracks gas); later
+  calls spend it.
 - **Refunds.** The unspent balance goes back to the agent through the relay. ZEAM pays the gas when the channel's
   fees cover its deposit and refund gas; otherwise the agent pays the quoted gas in USDC (15% margin, priced by the
   relay, public at `https://api.zeampass.com/relay/quote`). Nothing is claimed for you from it. `selfSend`: the

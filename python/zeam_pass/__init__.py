@@ -14,7 +14,7 @@ import urllib.parse
 
 from .engine import DEFAULT_CREDITS, DEFAULT_RELAY, DEFAULT_RPC, GRANTED_BY, Engine
 from .engine.bazaar import bazaar
-from .engine.meter import time_text
+from .engine.meter import bought_ms, time_rate, time_text
 from .engine.pricing import FreeLimit, deadline_ms, metered, price_of, running, units, usd
 from .engine.pricing import describe as describe_price
 from .engine.settlement import StateFile
@@ -113,6 +113,8 @@ def _check_value(key, spec, value):
             return f"argument {key} must be at least {spec['minimum']}"
         if _number(spec.get("maximum")) and value > spec["maximum"]:
             return f"argument {key} must be at most {spec['maximum']}"
+        if _number(spec.get("multipleOf")) and spec["multipleOf"] > 0 and value % spec["multipleOf"] != 0:
+            return f"argument {key} must be a multiple of {spec['multipleOf']}"
     if isinstance(value, str):
         if _number(spec.get("minLength")) and len(value) < spec["minLength"]:
             return f"argument {key} must be at least {spec['minLength']} characters"
@@ -189,13 +191,6 @@ def _out_of_time(on_line, ms=None):
     return {"error": "out_of_time", "message": f"the call ran past the {ms} ms its price buys. Nothing was charged. Buy time and call on a line."}
 
 
-def _blocks(args):
-    b = args.get("blocks") if isinstance(args, dict) else None
-    if isinstance(b, float) and b.is_integer():
-        b = int(b)
-    return b if isinstance(b, int) and not isinstance(b, bool) and 1 <= b <= 9007199254740991 else 1
-
-
 def _int(value):
     try:
         return int(float(value)) if value is not None and not isinstance(value, bool) else 0
@@ -232,7 +227,7 @@ class _RpcError(Exception):
 class Pass:
 
     def __init__(self, name, payout=None, mode="paywall", price=None, site=None, admit=None, relay=DEFAULT_RELAY,
-                 credits=DEFAULT_CREDITS, rpc=DEFAULT_RPC, state_dir=None, server_name=None, version="1.0.5", on_empty="refuse",
+                 credits=DEFAULT_CREDITS, rpc=DEFAULT_RPC, state_dir=None, server_name=None, version="1.0.7", on_empty="refuse",
                  fee_recipient=None, credit_issuer=None, refund_url=None, tick_seconds=60, relay_transport=None,
                  credits_http=None, settings=None, contact=None, payout_is_fee_recipient=False, prices=None, free=None, free_limit=None, time=None):
         self.name = name
@@ -257,22 +252,23 @@ class Pass:
         t = self.time
         meter = self.meter
 
-        def buy_time(blocks=1):
-            n = _blocks({"blocks": blocks})
+        def buy_time(ms=None, blocks=None):
+            n = bought_ms(t, {"ms": ms, "blocks": blocks})
             box = running() or {}
             cid = box.get("channelId")
             st = meter.status(cid)
-            return {"channelId": cid, "boughtMs": n * t["blockMs"], "msRemaining": st["msRemaining"] + n * t["blockMs"],
-                    "blockMs": t["blockMs"], "paidUSD": usd(n * t["blockMicro"])}
+            return {"channelId": cid, "boughtMs": n, "msRemaining": st["msRemaining"] + n,
+                    "paidUSD": usd(n // t["rateMs"] * t["rateMicro"])}
 
         def line(**args):
             return self._line_tool(args, "")
 
         self._tools["buy_time"] = {
             "name": "buy_time", "builtin": "buy_time", "run": buy_time, "price": None, "unit": None, "free": False,
-            "description": f"Buys line time: ${usd(t['blockMicro'])} per {t['blockMs']} ms block, for the channel that pays. Then open a line.",
-            "inputSchema": {"type": "object", "properties": {"blocks": {"type": "integer", "minimum": 1, "maximum": t["maxBlocks"],
-                                                                        "description": f"blocks of {t['blockMs']} ms; default 1"}}},
+            "description": f"Buys line time: {time_rate(t)}, for the channel that pays. Then open a line.",
+            "inputSchema": {"type": "object", "properties": {"ms": {
+                "type": "integer", "minimum": t["rateMs"], **({"multipleOf": t["rateMs"]} if t["rateMs"] > 1 else {}), **({"maximum": t["maxMs"]} if t.get("maxMs") else {}),
+                "description": f"milliseconds of line time; default {t['unitMs']}. Buying again adds time"}}},
         }
         self._tools["line"] = {
             "name": "line", "builtin": "line", "run": line, "price": None, "unit": None, "free": True,
@@ -329,9 +325,20 @@ class Pass:
     def _own_price(tool):
         return tool.get("price") is not None or tool.get("unit") is not None
 
+    def _asked(self, tool, args):
+        if tool.get("builtin") != "buy_time" or not isinstance(args, dict) or "ms" in args:
+            return args
+        blocks = args.get("blocks")
+        if isinstance(blocks, float) and blocks.is_integer():
+            blocks = int(blocks)
+        if isinstance(blocks, int) and not isinstance(blocks, bool) and 1 <= blocks <= 9007199254740991:
+            return {**args, "ms": blocks * self.time["unitMs"]}
+        return args
+
     def _price_for(self, tool, args=None):
         if tool.get("builtin") == "buy_time":
-            return {"micro": _blocks(args) * self.time["blockMicro"], "unitMicro": None}
+            ms = bought_ms(self.time, args)
+            return {"micro": ms // self.time["rateMs"] * self.time["rateMicro"], "unitMicro": None, "ms": ms}
         fallback = self.engine.price_micro
         prices = self.engine.prices
         if self._own_price(tool):
@@ -344,10 +351,10 @@ class Pass:
         if tool.get("builtin") == "line":
             return {"usd": "0", "per": "call", "free": True}
         if tool.get("builtin") == "buy_time":
-            return {"usd": usd(self.time["blockMicro"]), "per": "block", "blockMs": self.time["blockMs"], "maxBlocks": self.time["maxBlocks"]}
+            return {"usd": usd(self.time["rateMicro"]), "per": "ms", "ms": self.time["rateMs"], **({"maxMs": self.time["maxMs"]} if self.time.get("maxMs") else {})}
         if tool.get("meter") == "time" and not (callable(self.engine.prices) and not self._own_price(tool)):
             p = self._price_for(tool)
-            return {"per": "time", "blockUSD": usd(self.time["blockMicro"]), "blockMs": self.time["blockMs"],
+            return {"per": "time", "usd": usd(self.time["rateMicro"]), "ms": self.time["rateMs"],
                     "callUSD": usd(p["micro"]), "callMs": self.meter.call_ms(p["micro"])}
         if self._is_free(tool):
             return describe_price(None, free=True, per_hour=self.engine.free_limit)
@@ -415,7 +422,7 @@ class Pass:
     def _bought(self, tool, args):
         if tool.get("builtin") != "buy_time":
             return None
-        ms = _blocks(args) * self.time["blockMs"]
+        ms = bought_ms(self.time, args)
         return {"credit": lambda hold: self.meter.credit(hold["channelId"], ms, hold["pendingId"]),
                 "undo": lambda hold: self.meter.uncredit(hold["channelId"], ms, hold["pendingId"])}
 
@@ -543,7 +550,7 @@ class Pass:
             args = _loads(body if body and body.strip() else b"{}")
         except ValueError as e:
             return 400, {}, {"error": "invalid_arguments", "message": f"the body is not JSON: {e}", "tool": tool_name}
-        wrong = _validate(tool["inputSchema"], args)
+        wrong = _validate(tool["inputSchema"], self._asked(tool, args))
         if wrong and self._probe(tool, args, _first(headers, ("payment-signature", "x-payment")), _first(headers, ("x-line",))):
             s = self._probe_terms(tool, resource, _first(headers, ("x-grant",)), refund_url)
             if s:
@@ -627,7 +634,7 @@ class Pass:
         tool = self._tools.get(name)
         if not tool:
             return _failure({"error": "unknown_tool", "tool": name, "tools": list(self._tools)})
-        wrong = _validate(tool["inputSchema"], args)
+        wrong = _validate(tool["inputSchema"], self._asked(tool, args))
         credential = meta.get(META_LINE).strip() if isinstance(meta.get(META_LINE), str) and meta[META_LINE].strip() else (line or "").strip()
         if wrong and self._probe(tool, args, "paid" if payment else "", credential):
             s = self._probe_terms(tool, resource, grant, refund_url, "mcp")

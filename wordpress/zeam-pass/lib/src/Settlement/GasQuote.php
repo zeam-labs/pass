@@ -205,8 +205,10 @@ final class GasQuote
             $configured = $this->cfg->depositFloorMicroUSD;
             return max($price, is_numeric($last) ? (int) $last : 0, is_numeric($configured) ? (int) $configured : 0);
         }
-        $floor = (int) ceil(($gas * $this->cfg->floorMargin) / $this->cfg->feeShare);
+        $back = $this->refund(true, false);
+        $home = $back === null ? 0 : (int) ceil($back['pay']['microUSD'] * $this->cfg->floorMargin);
+        $floor = max((int) ceil(($gas * $this->cfg->floorMargin) / $this->cfg->feeShare), $home);
         $this->cfg->cache->set($key, $floor, self::FLOOR_TTL);
-        return max($price, $floor);
+        return $price >= $floor ? $price : max($floor, $price + $home);
     }
 }

@@ -137,6 +137,8 @@ class GasQuote:
             last = self.cfg.cache.get(key)
             configured = self.cfg.depositFloorMicroUSD
             return max(price, to_int(last) if is_numeric(last) else 0, to_int(configured) if is_numeric(configured) else 0)
-        floor = int(math.ceil((gas * self.cfg.floorMargin) / self.cfg.feeShare))
+        back = self.refund(True, False)
+        home = 0 if back is None else int(math.ceil(back["pay"]["microUSD"] * self.cfg.floorMargin))
+        floor = max(int(math.ceil((gas * self.cfg.floorMargin) / self.cfg.feeShare)), home)
         self.cfg.cache.set(key, floor, self.FLOOR_TTL)
-        return max(price, floor)
+        return price if price >= floor else max(floor, price + home)

@@ -72,7 +72,8 @@ Other keyword arguments to `Pass(...)`:
   `(tool, args) -> spec`; a paywall needs `price` or `prices`.
 - `free` (default `[]`): tool names served with no payment and no admission.
 - `time` (default none): line time:
-  `{"block": "0.00025", "blockMs": 250, "idleMs": 0, "maxBlocks": 14400}`;
+  `{"usd": "0.00025", "ms": 250, "idleMs": 0}`: that many dollars buys that many milliseconds. A buyer buys any
+  number of milliseconds and buying again adds time (`"maxMs": N` limits one purchase, if you want that);
   `paywall` and `both` only; adds `buy_time`, `line` and `POST <base>/line`.
 - `free_limit` (default none): `N` or `{"perHour": N}`: N free calls per tool
   per client address per clock hour, kept in `state_dir/free.json` (a restart
@@ -122,7 +123,7 @@ The Python plugin does not read `pass.json`.
   validated.
 - `meter` (default none): `"time"`: on a line (`x-line`) the call burns the
   line's time; without one it is a paid call bounded to
-  floor(price × `blockMs` / `block`) ms (past it: 402 `out_of_time`, not
+  the milliseconds its price buys at the `time` rate (past it: 402 `out_of_time`, not
   charged); needs `time`, never free.
 
 Order: the tool's `price`/`unit`, then `prices`, then `price`. The 402 carries this call's amount in `accepts`,
@@ -217,7 +218,7 @@ app.add_url_rule("/refund", view_func=agents.refund_view(), methods=["POST"])
 
 With `time` set, an agent buys time and spends it on a line with no payment per call:
 
-1. `buy_time {"blocks": n}` (1 to `maxBlocks`): a paid call of n × `block`; the n × `blockMs` ms are credited to the
+1. `buy_time {"ms": n}` (any number of milliseconds; buying again adds time): a paid call for n ms at the `time` rate; the n ms are credited to the
    paying channel once the payment settles, once per payment.
 2. `POST <base>/line {"op": "open", "channelId"}` (or the free `line` tool): a message to sign with the payer key.
 3. `{"op": "prove", "channelId", "nonce", "signature"}`: the credential; the meter is on. A nonce is one attempt, 300 s.

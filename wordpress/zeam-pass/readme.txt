@@ -4,7 +4,7 @@ Tags: ai, agents, x402, paywall, mcp
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.6
+Stable tag: 1.0.8
 License: GPL-2.0-only
 License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 
@@ -36,12 +36,12 @@ The engine runs inside your WordPress. ZEAM holds none of your money or keys and
 * **Prices per tool.** Each tool: its own price, else the price per call. A 402 carries that call's amount, `pricing` for it and `prices` for every tool. `tools/list`: `_meta["zeam-pass/price"]`. OpenAPI: `x-price`.
 * **Free tools.** Check "Free" on a tool: no payment, no key, arguments still checked. "Free calls an hour per address": N per tool per IP per clock hour; over it a 429 with `Retry-After` and `retry_after_seconds`. Empty: no limit.
 * **Usage.** A tool with a `unit` price reserves its price, reports units, and is charged units x unit, at most the reserve. No units reported: failed, nothing charged. The settle answer has `chargedAmount` and `reservedAmount`.
-* **Line time.** Set a block price (and ms, default 250): adds `buy_time` (paid, blocks x block) and `line` (free). 1. `buy_time {blocks}`: credited to the paying channel with the payment; time that cannot be recorded is not charged. 2. `POST /wp-json/zeam-pass/line {"op":"open","channelId"}`, sign `sign` with the payer key, `{"op":"prove","channelId","nonce","signature"}`: a credential. 3. Call a time tool with header `x-line` (MCP: `_meta["zeam-pass/line"]`): no payment, time burns while it runs, `X-Pass-Ms-Remaining`, `X-Pass-Ms-Elapsed`. Out of time: 402 `out_of_time`. 4. A refund returns unburned time (`timeReturnedMs`) and closes the line. You are paid only for time that burned.
+* **Line time.** Set a price in USD and the milliseconds it buys (default 250): adds `buy_time` (paid by the millisecond) and `line` (free). 1. `buy_time {ms}`: credited to the paying channel with the payment; time that cannot be recorded is not charged. 2. `POST /wp-json/zeam-pass/line {"op":"open","channelId"}`, sign `sign` with the payer key, `{"op":"prove","channelId","nonce","signature"}`: a credential. 3. Call a time tool with header `x-line` (MCP: `_meta["zeam-pass/line"]`): no payment, time burns while it runs, `X-Pass-Ms-Remaining`, `X-Pass-Ms-Elapsed`. Out of time: 402 `out_of_time`. 4. A refund returns unburned time (`timeReturnedMs`) and closes the line. You are paid only for time that burned.
 * Optional: hold the full text back from the WordPress REST API and your RSS and Atom feeds; anonymous readers get the excerpt and a pointer to your tools. Your pages and logged-in editors are unaffected.
 
 == Installation ==
 
-1. Download the plugin: https://zeampass.com/downloads/zeam-pass-1.0.6.zip (its SHA-256 is next to it, at the same address plus .sha256). Plugins -> Add New -> Upload Plugin, choose the zip, Install Now, then Activate.
+1. Download the plugin: https://zeampass.com/downloads/zeam-pass-1.0.8.zip (its SHA-256 is next to it, at the same address plus .sha256). Plugins -> Add New -> Upload Plugin, choose the zip, Install Now, then Activate.
 2. Settings -> ZEAM Pass.
 3. Connect your payout wallet: your browser wallet, or paste the address.
 4. Choose gate, paywall or both. Paywall: set a price per call; optional, a price or Free per tool and free calls an hour per address. Gate: list the addresses of the keys you admit. "Contact for access": a web address or a mailto: address where an agent asks to be admitted. Agents see it in every 402 and when a key is refused. Empty: your site's address; your admin email is never shown.
@@ -62,7 +62,7 @@ Your site must be reachable from the internet and use pretty permalinks.
 
 `add_filter('zeam_pass_tools', function ($tools) { $tools['word_count'] = ['description' => 'Counts words.', 'inputSchema' => ['type' => 'object', 'properties' => ['text' => ['type' => 'string']], 'required' => ['text']], 'price' => '0.05', 'unit' => '0.0001', 'run' => function ($args, $meter) { $n = str_word_count($args['text']); $meter->units($n); return ['words' => $n]; }]; return $tools; });`
 
-Keys: `description`, `inputSchema`, `outputSchema` (the result's JSON Schema, optional; listed in the 402's x402 bazaar discovery extension), `price` (USD, optional), `unit` (USD per unit, optional), `free` (optional), `meter` (`'time'`, optional), `run`. A `'meter' => 'time'` tool needs line time, is never free, and gets its deadline from `$meter->deadlineMs()` (epoch ms): on a line it spends the line's time; without one it is a paid call for price x block ms / block, and past that it answers 402 `out_of_time`, not charged. The names `buy_time` and `line` are taken. A price that is not USD with up to 6 decimals, $0.000001 to $1,000, drops the tool. `zeam_pass_prices` filter, optional: `($spec, $tool, $args)` returns a price for tools with none of their own; a price it cannot give answers 500 `price_invalid`.
+Keys: `description`, `inputSchema`, `outputSchema` (the result's JSON Schema, optional; listed in the 402's x402 bazaar discovery extension), `price` (USD, optional), `unit` (USD per unit, optional), `free` (optional), `meter` (`'time'`, optional), `run`. A `'meter' => 'time'` tool needs line time, is never free, and gets its deadline from `$meter->deadlineMs()` (epoch ms): on a line it spends the line's time; without one it is a paid call that runs for the milliseconds its price buys at your line time rate, and past that it answers 402 `out_of_time`, not charged. The names `buy_time` and `line` are taken. A price that is not USD with up to 6 decimals, $0.000001 to $1,000, drops the tool. `zeam_pass_prices` filter, optional: `($spec, $tool, $args)` returns a price for tools with none of their own; a price it cannot give answers 500 `price_invalid`.
 
 **Advanced.** The settings page sets the relay (default `https://api.zeampass.com/relay`), the credit service (default `https://api.zeampass.com/credits`) and the Base RPC (default `https://mainnet.base.org`, rate-limited). Development only: `ZEAM_PASS_FEE_RECIPIENT` and `ZEAM_PASS_CREDIT_ISSUER` in wp-config.php override the fee address and the credit issuer.
 
@@ -78,6 +78,12 @@ The plugin calls four outside services, with only the data listed here.
 No personal data about your visitors or editors is sent. Agents' payments reach the relay only as the transactions they signed.
 
 == Changelog ==
+
+= 1.0.8 =
+* The smallest deposit an agent can make now always leaves enough to get the rest back: after one call, the balance covers the gas of a refund paid for in USDC. Sellers at the standard fee see no change.
+
+= 1.0.7 =
+* Line time is sold by the millisecond. Agents call `buy_time` with `ms`, in any amount, and buying again adds time; the one-hour limit on a purchase is gone. The price reads as dollars per millisecond everywhere an agent sees it. Agents that still send `blocks` keep working, and your saved line time price is unchanged.
 
 = 1.0.6 =
 * A paid call's 402 carries the x402 bazaar discovery extension: the tool's input schema, its output schema, and how to call it, so x402 directories can list and call your tools.

@@ -51,17 +51,21 @@ or WordPress transients, so it survives a restart; a host that passes no client 
 reports whole units; settle commits min(reserve, units × unit). Every settle states `extra.chargedAmount` and `extra.reservedAmount`.
 No units reported: released, 500 `tool_failed`. Shared: `wordpress/tests/pricing/fixtures.json`.
 
-Time (`time: {block, blockMs, idleMs, maxBlocks}`, paywall or both): a clock per channel in `meter/clocks/<channelId>`
+Time (`time: {usd, ms, idleMs}`: that many dollars buys that many milliseconds, reduced to the rate `rateMicro` per `rateMs`; `maxMs` only if the seller limits one purchase; paywall or both): a clock per channel in `meter/clocks/<channelId>`
 (`balanceMs`, `spentMs`, `returnedMs`, `on`, `since`, `lastActive`, `calls`, `credited`, `nonces`, `lines`), line
-credentials by sha256 in `meter/lines/`. `buy_time` is priced blocks × block and credits blocks × blockMs once per hold,
+credentials by sha256 in `meter/lines/`. `buy_time {ms}` is priced ms / rateMs × rateMicro and credits those ms once per hold (a legacy `{blocks}` counts `ms` each),
 before the settle: a credit that cannot be written releases the hold (500 `tool_failed`, nothing charged); a settle
 that fails takes the credit back (`unbuy`). A line: a nonce (300 s, one attempt) signed EIP-191 over `ZEAM Pass line\nchannel:
-<id>\nnonce: <nonce>` by the payer or payerAuthorizer. Burn = the union of running calls (each to its deadline =
-start + balance) and `idleMs` after the last activity, while on. A call that ends in time burns from its start being
-written to its handler returning (`end` gets both); the store's time before and after is not burned. Claims, payouts and refunds use earned = max(charged −
-ceil(unburned ms × block / blockMs), claimed); a refund switches the meter off first, is refused while a line call
+<id>\nnonce: <nonce>` by the payer or payerAuthorizer. Burn = the union of the calls' true intervals (each to its deadline =
+start + what is left) and `idleMs` after the last activity, while on. A call's true interval runs from its start being
+written to its handler returning (`end` gets both); the store's time before and after is not burned, for one call or
+for many at once. To do that the record holds the last 2000 ms provisionally: finished intervals wait in `done` and
+running calls count up to now, and time is made final (`spentMs`, `since`) only once it is 2000 ms old. `remaining`,
+`spent` and refunds always include the provisional part. A call that runs longer than the hold is billed its run time
+plus at most its own start write. Claims, payouts and refunds use earned = max(charged −
+ceil(unburned ms × rateMicro / rateMs), claimed); a refund switches the meter off first, is refused while a line call
 runs (`request_open`), and zeroes the clock and closes its lines once sent or handed over. A time tool without a
-line: a paid call bounded to price × blockMs / block ms. Shared: `wordpress/tests/meter/fixtures.json`.
+line: a paid call bounded to price × rateMs / rateMicro ms. Shared: `wordpress/tests/meter/fixtures.json`.
 
 Bad arguments or a non-JSON body: 400 `invalid_arguments` in every engine. A result that is not valid JSON (a
 non-finite number, non-UTF-8 bytes, a value the encoder changes or drops) is a failed call: hold released, 500

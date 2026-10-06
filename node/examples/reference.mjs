@@ -18,7 +18,7 @@ const agents = pass({
   contact: env.PASS_CONTACT || undefined,
   prices: env.PASS_PRICES ? priced(env.PASS_PRICES) : undefined,
   freeLimit: env.PASS_FREE_LIMIT ? Number(env.PASS_FREE_LIMIT) : undefined,
-  time: metered && env.PASS_TIME_BLOCK ? { block: env.PASS_TIME_BLOCK, blockMs: Number(env.PASS_TIME_BLOCK_MS || 250) } : undefined,
+  time: metered && env.PASS_TIME_BLOCK ? { usd: env.PASS_TIME_BLOCK, ms: Number(env.PASS_TIME_BLOCK_MS || 250) } : undefined,
   serverName: 'ZEAM Pass reference seller (Node)',
 })
 agents.tool({

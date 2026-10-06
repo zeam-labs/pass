@@ -105,9 +105,9 @@ function zeam_pass_save_settings(array $in)
     $block = trim((string) (is_scalar($in['time_block'] ?? null) ? $in['time_block'] : ''));
     $blockMs = trim((string) (is_scalar($in['time_block_ms'] ?? null) ? $in['time_block_ms'] : ''));
     if ($block !== '' && (!preg_match('/^\d+(\.\d{1,6})?$/D', $block) || (float) $block <= 0 || (float) $block > 1000)) {
-        $errors[] = 'A line time block is USD above 0, at most 1000, at most 6 decimals, like 0.00025.';
+        $errors[] = 'The line time price is USD above 0, at most 1000, at most 6 decimals, like 0.00025.';
     } elseif ($blockMs !== '' && (!ctype_digit($blockMs) || (int) $blockMs < 1 || (int) $blockMs > 3600000)) {
-        $errors[] = 'A line time block is 1 to 3600000 ms, or empty for 250.';
+        $errors[] = 'The line time amount is 1 to 3600000 ms, or empty for 250.';
     } elseif ($block !== '' && $values['mode'] === 'gate') {
         $errors[] = 'Line time needs a paywall or both.';
     } else {

@@ -94,6 +94,8 @@ def describe(price, free=False, per_hour=None, varies=False):
 
 
 def pricing(price):
+    if price.get("ms"):
+        return f"${usd(price['micro'])} for {price['ms']} ms of line time. Time you do not burn comes back with a refund."
     if price["unitMicro"] is not None:
         return (f"Up to ${usd(price['micro'])} per call, reserved; charged ${usd(price['unitMicro'])} per unit the call reports, "
                 "at most the reserve. A failed call is not charged.")

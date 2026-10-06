@@ -3,7 +3,7 @@
  * Plugin Name: ZEAM Pass
  * Plugin URI: https://zeampass.com
  * Description: Put a gate, a paywall or both in front of your posts for AI agents, on your own site. Agents search and read over MCP and over x402 HTTP. No sign-up and no account: install, connect the wallet you are paid to, choose. Your earnings go to your own split, 90.01% to your wallet.
- * Version: 1.0.6
+ * Version: 1.0.8
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ZEAM Labs, LLC
@@ -29,7 +29,7 @@ const ZEAM_PASS_LINE_OPS = ['open', 'prove', 'on', 'off', 'status', 'close'];
 const ZEAM_PASS_TIME_TOOLS = ['buy_time', 'line'];
 const ZEAM_PASS_BUILTIN_TOOLS = ['search_posts', 'read_post'];
 const ZEAM_PASS_NO_UNITS = 'the tool reported no units. Nothing was charged.';
-const ZEAM_PASS_VERSION = '1.0.6';
+const ZEAM_PASS_VERSION = '1.0.8';
 const ZEAM_PASS_RESULT_NOT_JSON = 'the result is not valid JSON (a non-finite number or a non-JSON value); nothing was charged';
 
 require_once __DIR__ . '/lib/autoload.php';
@@ -146,10 +146,9 @@ function zeam_pass_time()
         return null;
     }
     $ms = zeam_pass_opt('time_block_ms', '');
-    $blockMs = (is_int($ms) || (is_string($ms) && ctype_digit($ms))) && (int) $ms >= 1 ? (int) $ms : \ZeamPass\Meter\TimeMeter::DEFAULT_BLOCK_MS;
+    $unitMs = (is_int($ms) || (is_string($ms) && ctype_digit($ms))) && (int) $ms >= 1 ? (int) $ms : \ZeamPass\Meter\TimeMeter::DEFAULT_MS;
     try {
-        $micro = \ZeamPass\Pricing::microOf($block, 'time.block');
-        return \ZeamPass\Meter\TimeMeter::options(['block' => $block, 'blockMs' => $blockMs, 'maxBlocks' => min(\ZeamPass\Meter\TimeMeter::DEFAULT_MAX_BLOCKS, intdiv(1000000000, $micro))]);
+        return \ZeamPass\Meter\TimeMeter::options(['usd' => $block, 'ms' => $unitMs]);
     } catch (InvalidArgumentException $e) {
         return null;
     }
@@ -161,23 +160,19 @@ function zeam_pass_time_meter()
     return $time === null ? null : new \ZeamPass\Meter\TimeMeter($time, new ZeamPassMeterStore('clock'), new ZeamPassMeterStore('line'), 'zeam_pass_now_ms');
 }
 
-function zeam_pass_blocks(array $args)
+function zeam_pass_bought_ms(array $args)
 {
-    $b = $args['blocks'] ?? null;
-    if (is_float($b) && is_finite($b) && floor($b) === $b && abs($b) <= 9007199254740991) {
-        $b = (int) $b;
-    }
-    return is_int($b) && $b >= 1 ? $b : 1;
+    return \ZeamPass\Meter\TimeMeter::boughtMs(zeam_pass_time(), $args);
 }
 
 function zeam_pass_time_tools(array $time)
 {
-    $usd = \ZeamPass\Pricing::usd($time['blockMicro']);
+    $rate = \ZeamPass\Meter\TimeMeter::rate($time);
     return [
         'buy_time' => [
             'builtin' => 'buy_time',
-            'description' => "Buys line time: \${$usd} per {$time['blockMs']} ms block, for the channel that pays. Then open a line.",
-            'inputSchema' => ['type' => 'object', 'properties' => ['blocks' => ['type' => 'integer', 'minimum' => 1, 'maximum' => $time['maxBlocks'], 'description' => "blocks of {$time['blockMs']} ms; default 1"]]],
+            'description' => "Buys line time: {$rate}, for the channel that pays. Then open a line.",
+            'inputSchema' => ['type' => 'object', 'properties' => ['ms' => ['type' => 'integer', 'minimum' => $time['rateMs']] + ($time['rateMs'] > 1 ? ['multipleOf' => $time['rateMs']] : []) + (empty($time['maxMs']) ? [] : ['maximum' => $time['maxMs']]) + ['description' => "milliseconds of line time; default {$time['unitMs']}. Buying again adds time"]]],
             'free' => false,
         ],
         'line' => [
@@ -237,7 +232,9 @@ function zeam_pass_tools()
 function zeam_pass_price_for($name, array $t, array $args = [])
 {
     if (($t['builtin'] ?? null) === 'buy_time') {
-        return ['micro' => zeam_pass_blocks($args) * zeam_pass_time()['blockMicro'], 'unitMicro' => null];
+        $time = zeam_pass_time();
+        $ms = zeam_pass_bought_ms($args);
+        return ['micro' => intdiv($ms, $time['rateMs']) * $time['rateMicro'], 'unitMicro' => null, 'ms' => $ms];
     }
     if (zeam_pass_own_price($t)) {
         return \ZeamPass\Pricing::priceOf(['price' => $t['price'] ?? null, 'unit' => $t['unit'] ?? null], zeam_pass_site_fallback());
@@ -255,7 +252,7 @@ function zeam_pass_price_tag($name, array $t)
         return ['usd' => '0', 'per' => 'call', 'free' => true];
     }
     if (($t['builtin'] ?? null) === 'buy_time') {
-        return ['usd' => \ZeamPass\Pricing::usd($time['blockMicro']), 'per' => 'block', 'blockMs' => $time['blockMs'], 'maxBlocks' => $time['maxBlocks']];
+        return ['usd' => \ZeamPass\Pricing::usd($time['rateMicro']), 'per' => 'ms', 'ms' => $time['rateMs']] + (empty($time['maxMs']) ? [] : ['maxMs' => $time['maxMs']]);
     }
     if (($t['meter'] ?? null) === 'time' && $time !== null && !(has_filter('zeam_pass_prices') && !zeam_pass_own_price($t))) {
         try {
@@ -263,7 +260,7 @@ function zeam_pass_price_tag($name, array $t)
         } catch (\InvalidArgumentException $e) {
             return null;
         }
-        return ['per' => 'time', 'blockUSD' => \ZeamPass\Pricing::usd($time['blockMicro']), 'blockMs' => $time['blockMs'], 'callUSD' => \ZeamPass\Pricing::usd($p['micro']), 'callMs' => intdiv($p['micro'] * $time['blockMs'], $time['blockMicro'])];
+        return ['per' => 'time', 'usd' => \ZeamPass\Pricing::usd($time['rateMicro']), 'ms' => $time['rateMs'], 'callUSD' => \ZeamPass\Pricing::usd($p['micro']), 'callMs' => intdiv($p['micro'] * $time['rateMs'], $time['rateMicro'])];
     }
     if (!empty($t['free'])) {
         return \ZeamPass\Pricing::describe(null, ['free' => true, 'perHour' => zeam_pass_free_limit()]);
@@ -356,6 +353,12 @@ function zeam_pass_validate($tool, $args)
     if (!zeam_pass_is_object($args)) {
         return $bad('the arguments must be an object');
     }
+    if ((zeam_pass_tools()[$tool]['builtin'] ?? null) === 'buy_time' && is_array($args) && !array_key_exists('ms', $args)) {
+        $blocks = \ZeamPass\Meter\TimeMeter::safeInt($args['blocks'] ?? null);
+        if ($blocks !== null && $blocks >= 1) {
+            $args['ms'] = $blocks * zeam_pass_time()['unitMs'];
+        }
+    }
     foreach ($schema['required'] ?? [] as $key) {
         if (!array_key_exists($key, $args)) {
             return $bad("missing required argument: {$key}");
@@ -374,6 +377,9 @@ function zeam_pass_validate($tool, $args)
         }
         if (isset($prop['maximum']) && (is_int($v) || is_float($v)) && $v > $prop['maximum']) {
             return $bad("argument {$key} must be at most {$prop['maximum']}");
+        }
+        if (isset($prop['multipleOf']) && $prop['multipleOf'] > 0 && (is_int($v) || is_float($v)) && fmod((float) $v, (float) $prop['multipleOf']) !== 0.0) {
+            return $bad("argument {$key} must be a multiple of {$prop['multipleOf']}");
         }
         $length = is_string($v) ? (function_exists('mb_strlen') ? mb_strlen($v, 'UTF-8') : strlen($v)) : null;
         if (isset($prop['minLength']) && $length !== null && $length < $prop['minLength']) {
@@ -402,10 +408,10 @@ function zeam_pass_run($tool, array $args, ?ZeamPassMeter $meter = null)
     $tools = zeam_pass_tools();
     if (($tools[$tool]['builtin'] ?? null) === 'buy_time') {
         $time = zeam_pass_time();
-        $blocks = zeam_pass_blocks($args);
+        $ms = zeam_pass_bought_ms($args);
         $channelId = $meter ? $meter->channelId() : null;
         $st = zeam_pass_time_meter()->status($channelId);
-        return ['channelId' => $channelId, 'boughtMs' => $blocks * $time['blockMs'], 'msRemaining' => $st['msRemaining'] + $blocks * $time['blockMs'], 'blockMs' => $time['blockMs'], 'paidUSD' => \ZeamPass\Pricing::usd($blocks * $time['blockMicro'])];
+        return ['channelId' => $channelId, 'boughtMs' => $ms, 'msRemaining' => $st['msRemaining'] + $ms, 'paidUSD' => \ZeamPass\Pricing::usd(intdiv($ms, $time['rateMs']) * $time['rateMicro'])];
     }
     if (isset($tools[$tool]['run']) && is_callable($tools[$tool]['run'])) {
         return call_user_func($tools[$tool]['run'], $args, $meter ?: new ZeamPassMeter());

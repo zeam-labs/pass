@@ -60,8 +60,8 @@ Each tool has its own price. `prices` in the 402 tags every tool; `tools/list` t
 | `{"usd":"0.0001","per":"unit","upTo":"0.05"}` | usage: sign $0.05; charged $0.0001 × the units the tool reports, at most $0.05 |
 | `{"usd":"0","per":"call","free":true,"perHour":60}` | free: no payment, no admission; 60 calls an hour per address, then 429 `free_limit` |
 | `{"per":"call","varies":true}` | depends on the arguments; the call's 402 states it |
-| `{"usd":"0.00025","per":"block","blockMs":250,"maxBlocks":14400}` | `buy_time`: $0.00025 per block of 250 ms of line time, 1 to `maxBlocks` blocks a call (see Line time) |
-| `{"per":"time","blockUSD":"0.00025","blockMs":250,"callUSD":"0.01","callMs":10000}` | a time tool: on a line it burns line time; without one, $0.01 a call for up to 10,000 ms |
+| `{"usd":"0.000001","per":"ms","ms":1}` | `buy_time`: line time at $0.000001 per millisecond. Buy any number of milliseconds, and buying again adds time. `"ms":10` means the price is per 10 ms and purchases are multiples of 10 ms. A tag with `maxMs` is a seller that limits one purchase (see Line time) |
+| `{"per":"time","usd":"0.000001","ms":1,"callUSD":"0.01","callMs":10000}` | a time tool: on a line it burns line time at `usd` per `ms` milliseconds; without one, $0.01 a call for up to 10,000 ms |
 
 Usage: sign `accepts[].amount`, the reserve. `PAYMENT-RESPONSE` `extra` states `chargedAmount` (used) and
 `reservedAmount` on every settled call, equal when the whole reserve was charged; the rest stays in your channel. Sign the next voucher on `extra.channelState.chargedCumulativeAmount`
@@ -70,12 +70,14 @@ Usage: sign `accepts[].amount`, the reserve. `PAYMENT-RESPONSE` `extra` states `
 ### Line time
 
 A seller that sells time lists `buy_time` and `line`, tags each time tool
-`{"per":"time","blockUSD":"0.00025","blockMs":250,"callUSD":"0.01","callMs":10000}`, and states the rule in the
+`{"per":"time","usd":"0.000001","ms":1,"callUSD":"0.01","callMs":10000}`, and states the rule in the
 402's `time` line.
 
-1. **Buy.** Call `buy_time` `{"blocks": N}` and pay N × `blockUSD` (its tag is `per: "block"`). The time goes to the
+1. **Buy.** Call `buy_time` `{"ms": N}` and pay for N milliseconds at the tagged rate (its tag is `per: "ms"`). The time goes to the
    paying channel with the payment: time that cannot be recorded is not charged (500 `tool_failed`), and a payment
-   that does not settle credits no time. The answer states `boughtMs` and `msRemaining`.
+   that does not settle credits no time. The answer states `boughtMs` and `msRemaining`. With no `ms` the seller's
+   default amount is bought; the `buy_time` schema states it. A seller that limits one purchase tags `maxMs` and
+   refuses more with 400; most set none.
 2. **Open a line.** `POST <base>/line` `{"op":"open","channelId"}` answers `{nonce, sign}`. Sign `sign` (EIP-191)
    with the channel's payer key (or `payerAuthorizer`), then `POST` `{"op":"prove","channelId","nonce","signature"}`:
    the answer carries `credential`. A nonce is one attempt, valid 300 s. MCP: the free `line` tool, same arguments.
@@ -192,7 +194,6 @@ r.headers.get('x-pass-granted-by')
 ```
 
 The Bridge sends `X402_GRANT` as `x-grant` on every request, over MCP and HTTP, from 3.0.0.
-`seller/test/grant-client.test.mjs` runs the client above against a reference seller in `both` and gate mode.
 
 ## 4. Errors
 
@@ -325,7 +326,7 @@ that shape) or `calibrated` (starting units, before the relay's first send of th
 **Ordering.** The payment is a `TransferWithAuthorization`, not a `ReceiveWithAuthorization`:
 `receiveWithAuthorization` requires the caller to be the payee, and the caller USDC sees is Multicall3. The relay
 enforces the order: the payment is sent after the refund, in the same transaction, and both land or neither lands. It
-never sends the payment alone or inside an escrow call (`seller/test/relay.test.mjs`). The seller hands the relay the
+never sends the payment alone or inside an escrow call. The seller hands the relay the
 refund and payment as one Multicall3 bundle, refund first, neither leg allowed to fail. The relay sends the bundle as
 is, or nested in a larger Multicall3 with other buyers' calls, where each bundle can fail alone: another buyer's
 failure does not undo yours, and a failing bundle undoes its own refund and payment. Anyone holding your signed
@@ -345,11 +346,22 @@ links are https://api.zeampass.com/c/<token>/mcp.
    `admission`, for a seller with an access list; `contact`, when set) and its prices: `pricing` (a sentence: the
    per-call range, line time apart), `priceMicro` and `priceTool` (its cheapest per-call tool), `prices` (each tool's
    tag: `{tool, usd, per: "call"}`, `{tool, usd, per: "unit", upTo}`, `{tool, per: "time", ...}`, `{tool, free: true}`,
-   `{tool, varies: true}`) and `time` (`{tool, usd, blockMs, maxBlocks}` when it sells line time). It creates
+   `{tool, varies: true}`) and `time` (`{tool, usd, ms}`: `usd` per `ms` milliseconds, plus `maxMs` if the seller limits one purchase, when it sells line time). It creates
    nothing.
-2. Derive the pass key from your wallet: sign `passMessage(receiver)` (`buyer/src/wallet.mjs`, EIP-191); pass `n` is
-   `passAt(keccak256(signature), n)`, a key and a channel salt. The token is the key's 32 bytes, base64url (`tokenOf`
-   in `buyer/src/passes.mjs`).
+2. Derive the pass key from your wallet. Sign this text with the wallet (EIP-191, personal_sign), with the seller's
+   receiver address from the quote, checksummed, in place of `<receiver>`:
+
+   ```
+   ZEAM Pass
+   merchant: <receiver>
+
+   Signing this derives the spending keys for your passes at this merchant.
+   It moves no money and approves no transaction.
+   ```
+
+   `seed = keccak256(signature)`. Pass `n` has key `keccak256(seed ‖ "key:n")` and channel salt
+   `keccak256(seed ‖ "salt:n")`, where `"key:0"` is those ASCII bytes. The token is the key's 32 bytes, base64url
+   without padding.
 3. `POST /issue {"seller": …, "token": …}` answers `passAddress`, `connectorUrl` and `page`. `409 pass_in_use`: pass
    `n` is funded; use `n + 1`. Without `token` the service makes a random key and returns it once; it stores no key.
    A seller with `admission` must admit the pass address: add `"grant"`, an `x-grant` value with delegate =
